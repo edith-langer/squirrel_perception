@@ -32,7 +32,8 @@ bool OctomapLib::readOctoMapFromFile(std::string filename, OcTree *&ocTree, bool
     }
 }
 
-void OctomapLib::tranformCloud2Map(pcl::PointCloud<PointT>::Ptr &cloud) {
+//NOT related to octomap
+/*void OctomapLib::tranformCloud2Map(pcl::PointCloud<PointT>::Ptr &cloud) {
     try
     {
         ros::Duration(1.0).sleep();
@@ -56,7 +57,7 @@ void OctomapLib::tranformCloud2Map(pcl::PointCloud<PointT>::Ptr &cloud) {
         std::cout << "Transformation error: " << ex.what() << std::endl;
         return;
     }
-}
+}*/
 
 void OctomapLib::checkCloudAgainstOctomap(const pcl::PointCloud<PointT>::Ptr &cloud, OcTree *ocTree) {
     pcl::PointCloud<PointT>::Ptr cloud_copy(new pcl::PointCloud<PointT>);

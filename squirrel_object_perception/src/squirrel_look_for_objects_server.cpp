@@ -450,7 +450,7 @@ protected:
             }
         }
 
-        ROS_INFO("TUW: Points: %d, overlapping points: %d, overlapping factor of %f",
+        ROS_INFO("TUW: Points: %lu, overlapping points: %d, overlapping factor of %f",
                  cloud->points.size(), overlappingPoints, ((double)overlappingPoints/cloud->points.size()));
         if ((double)overlappingPoints/cloud->points.size() > 0.8) {
             ROS_INFO("Segmented object got rejected after comparing it to the octomap");
@@ -543,13 +543,13 @@ public:
                 std::vector< boost::shared_ptr<squirrel_object_perception_msgs::SceneObject> > results;
                 if(message_store.queryNamed<squirrel_object_perception_msgs::SceneObject>(goal->id, results)) {
                     if(results.size()<1) { // no results
-                        is_in_DB = false;
+                        ROS_INFO("TUW: look_for_objects_server is EXPLORING");
                         if (staticMap == NULL) {
                             initializeOctomap();
                         }
                         ROS_INFO("There is nothing in the Database with ID %s. Use the whole scene for segmentation", (goal->id).c_str());
                     } else {
-                        is_in_DB = true;
+                        ROS_INFO("TUW: look_for_objects_server is CHECKING");
                         sceneObject = *results.at(0);
                         pcl::PointCloud<PointT>::Ptr cloud(new pcl::PointCloud<PointT>);
                         pcl::fromROSMsg(scene, *cloud);
@@ -586,11 +586,16 @@ public:
                     }
                 }
                 else {
-                    is_in_DB = false;
+                    ROS_INFO("TUW: look_for_objects_server is EXPLORING");
                     if (staticMap == NULL) {
                         initializeOctomap();
                     }
                     ROS_INFO("There is nothing in the Database with ID %s. Use the whole scene for segmentation", (goal->id).c_str());
+                }
+            } else { //EXPLORING
+                ROS_INFO("TUW: look_for_objects_server is EXPLORING");
+                if (staticMap == NULL) {
+                    initializeOctomap();
                 }
             }
         }
@@ -630,17 +635,14 @@ public:
         for(objectIterator = objects.begin(); objectIterator != objects.end(); objectIterator++)
         {
             //segmentation was performed on whole scene
-            if (!is_in_DB) {
-                if (overlapWithOctomap((*objectIterator).sceneObject)) {
-                    (*objectIterator).rejected= true;
-                } else {
-                    (*objectIterator).rejected= false;
-                    success = compareToDB((*objectIterator).sceneObject);
-                }
+
+            if (overlapWithOctomap((*objectIterator).sceneObject)) {
+                (*objectIterator).rejected= true;
             } else {
                 (*objectIterator).rejected= false;
                 success = compareToDB((*objectIterator).sceneObject);
             }
+
 
 
             visualizeObject((*objectIterator));

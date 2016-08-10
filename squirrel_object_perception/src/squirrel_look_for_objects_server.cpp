@@ -566,21 +566,26 @@ public:
                                      " Y(" << min_p.y << ";" << max_p.y << ")" <<
                                      " Z(" << min_p.z << ";" << max_p.z << ")";
 
+
+
                         //TODO maybe add some buffer to the min/max points if segmentation method was not accurate
-                        /*pcl::PassThrough<PointT> pass;
+                        pcl::PassThrough<PointT> pass;
                         pass.setKeepOrganized(true);
                         pass.setFilterFieldName("x");
-                        pass.setFilterLimits(min_p.x, max_p.x);
+                        pass.setFilterLimits(min_p.x-0.05, max_p.x+0.05);
                         pass.setInputCloud(cloud);
                         pass.filter(*cloud);
                         pass.setFilterFieldName("y");
-                        pass.setFilterLimits(min_p.y, max_p.y);
+                        pass.setFilterLimits(min_p.y-0.05, max_p.y+0.05);
                         pass.setInputCloud(cloud);
                         pass.filter(*cloud);
                         pass.setFilterFieldName("z");
-                        pass.setFilterLimits(min_p.z, max_p.z);
+                        pass.setFilterLimits(min_p.z-0.05, max_p.z+0.05);
                         pass.setInputCloud(cloud);
-                        pass.filter(*cloud); */
+                        pass.filter(*cloud);
+
+                        pcl::PCDWriter writer;
+                        writer.write<PointT>("cutted_scene.pcd", *cloud, false);
 
                         pcl::toROSMsg(*cloud, scene);
                     }

@@ -30,6 +30,7 @@
 #include <pcl_ros/transforms.h>
 #include "mongodb_store/message_store.h"
 #include "OctomapLib.h"
+#include <pcl/io/png_io.h>
 
 
 class Object
@@ -57,6 +58,8 @@ protected:
     squirrel_object_perception_msgs::LookForObjectsResult result_;
     // create needed variables
     sensor_msgs::PointCloud2 scene;
+    pcl::PointCloud<PointT>::Ptr original_scene;
+    std::vector<int> cutted_cloud_indices;
     bool success;
     sensor_msgs::Image saliency_map;
     std::vector<Object> objects;
@@ -361,6 +364,7 @@ protected:
         squirrel_object_perception_msgs::SegmentOnce srv;
 
         int cnt = 0;
+        pcl::io::savePCDFile("original_scene.pcd", *original_scene);
         //right now only one object is returned
         while(client.call(srv)) {
             ROS_INFO("Called service %s ", "/squirrel_segmentation_incremental_once");
@@ -368,6 +372,8 @@ protected:
             this->cluster_indices = srv.response.clusters_indices;
             sleep(2);
             for(int i=0; i < srv.response.poses.size(); i++) {
+
+                //save the segmented object in map coordinates
                 ROS_INFO("TUW: Check segmented object");
                 Object obj;
                 obj.rejected = false;
@@ -386,7 +392,7 @@ protected:
                 PointT min_p, max_p;
                 pcl::getMinMax3D(*cloud, min_p, max_p);
 
-                //it is in kinect-optical-frame! (x=z, y=x, z=y)
+                //-----it is in kinect-optical-frame! (x=z, y=x, z=y)
                 //double x_diam = double(max_p.x - min_p.x + 1);
                 //double y_diam = double(max_p.y - min_p.y + 1);
                 //double z_diam = double(max_p.z - min_p.z + 1);
@@ -401,7 +407,35 @@ protected:
                 obj.sceneObject.bounding_cylinder.diameter = diam;
                 obj.sceneObject.bounding_cylinder.height = z_diam;
                 this->objects.push_back(obj);
+
+//                pcl::PointCloud<PointT>::Ptr object_cloud(new pcl::PointCloud<PointT>);
+//                pcl::fromROSMsg(obj.sceneObject.cloud, *object_cloud);
+//                pcl::io::savePCDFile("object_cloud.pcd", *object_cloud);
+
+
+                //-----visualize the segmented object in the original point cloud
+                int r = std::rand()%255;
+                int g = std::rand()%255;
+                int b = std::rand()%255;
+
+                for(std::vector<int>::const_iterator it = obj.point_indices.data.begin(); it != obj.point_indices.data.end(); ++it) {
+                    original_scene->points.at(*it).r = r;
+                    original_scene->points.at(*it).g = g;
+                    original_scene->points.at(*it).b = b;
+                }
             }
+
+            if(original_scene->height == 1)
+            {
+                //this is a HACK for Gazebo
+                if(original_scene->points.size() == 640*480)
+                {
+                    original_scene->height = 480;
+                    original_scene->width = 640;
+                }
+            }
+            pcl::io::savePNGFile("segmented_scene.png", *original_scene);
+            pcl::io::savePCDFile("segmented_scene.pcd", *original_scene);
         }
 
         if (cnt == 0) {
@@ -534,6 +568,9 @@ public:
             sceneConst.reset();
             ROS_INFO("%s: Received data", action_name_.c_str());
 
+            original_scene.reset(new pcl::PointCloud<PointT>);
+            pcl::fromROSMsg(scene, *original_scene);
+
             if (goal->look_for_object == squirrel_object_perception_msgs::LookForObjectsGoal::CHECK) {
                 //get lump size from DB and filter cloud for segmentation to cut off unnecessary parts
                 ROS_INFO("Checking out a lump");
@@ -569,7 +606,7 @@ public:
 
 
                         //TODO maybe add some buffer to the min/max points if segmentation method was not accurate
-                        pcl::PassThrough<PointT> pass;
+                        pcl::PassThrough<PointT> pass(true);
                         pass.setKeepOrganized(true);
                         pass.setFilterFieldName("x");
                         pass.setFilterLimits(min_p.x-0.05, max_p.x+0.05);
@@ -584,8 +621,11 @@ public:
                         pass.setInputCloud(cloud);
                         pass.filter(*cloud);
 
-                        pcl::PCDWriter writer;
-                        writer.write<PointT>("cutted_scene.pcd", *cloud, false);
+                        pass.filter(cutted_cloud_indices);
+
+
+//                        pcl::PCDWriter writer;
+//                        writer.write<PointT>("cutted_scene.pcd", *cloud, false);
 
                         pcl::toROSMsg(*cloud, scene);
                     }
@@ -627,7 +667,6 @@ public:
         for(int i=0; i<1; i++)
         {
             run_segmentation_once();
-            //run_visualization_once();
         }
         if (objects.size() < 1)
         {

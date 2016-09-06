@@ -24,13 +24,11 @@ int SegmentationPopoutNode::PersistentObject::cnt = 0;
 SegmentationPopoutNode::SegmentationPopoutNode()
 {
     n_ = 0;
-    segmenter_ = 0;
     cloud_.reset(new pcl::PointCloud<PointT>());
 }
 
 SegmentationPopoutNode::~SegmentationPopoutNode()
 {
-    delete segmenter_;
     delete n_;
 }
 
@@ -46,32 +44,162 @@ void SegmentationPopoutNode::initialize(int argc, char ** argv)
     SegmentOnce_ = n_->advertiseService ("/squirrel_segmentation_incremental_once", &SegmentationPopoutNode::returnNextResult, this);
     ROS_INFO("Ready to get service calls...");
 
-    v4r::PCLSegmenter<PointT>::Parameter params;
-    params.seg_type_ = 1;
-    segmenter_ = new v4r::PCLSegmenter<PointT>(params);
+    ros::spin();
 }
 
 bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentInit::Request & req, squirrel_object_perception_msgs::SegmentInit::Response & response)
 {
-    ROS_INFO("Try to segment");
     bool ret = false;
+
+    ROS_INFO("%s: new point cloud", ros::this_node::getName().c_str());
 
     // clear results for a new segmentation run
     results.clear();
 
     pcl::PointCloud<PointT>::Ptr inCloud(new pcl::PointCloud<PointT>());
+    //TODO change back
     pcl::fromROSMsg (req.cloud, *inCloud);
-    std::vector<pcl::PointIndices> cluster_indices;
-    std::vector<pcl::PointCloud<PointT>::Ptr> clusters;
-
     cloud_ = inCloud->makeShared();
-    segmenter_->set_input_cloud(*cloud_);
-    segmenter_->do_segmentation(cluster_indices);
+    //pcl::io::loadPCDFile("original_scene.pcd", *cloud_);
+    if(cloud_->height == 1)
+    {
+        //this is a HACK for Gazebo
+        if(cloud_->points.size() == 640*480)
+        {
+            cloud_->height = 480;
+            cloud_->width = 640;
+        }
+    }
+
+
+    pcl::PointCloud<PointT>::Ptr cloud_f (new pcl::PointCloud<PointT>);
+
+    // Create the filtering object: downsample the dataset using a leaf size of 1cm
+    pcl::VoxelGrid<PointT> vg;
+    pcl::PointCloud<PointT>::Ptr cloud_filtered (new pcl::PointCloud<PointT>);
+//    vg.setInputCloud (cloud_);
+//    vg.setLeafSize (0.01f, 0.01f, 0.01f);
+//    vg.filter (*cloud_filtered);
+    *cloud_filtered = *cloud_;
+
+    ROS_INFO("%s: cloud filtered", ros::this_node::getName().c_str());
+    cout << "Points in cloud " << cloud_filtered->size() << endl;
+
+
+    pcl::SACSegmentation<PointT> seg;
+    pcl::PointIndices::Ptr inliers (new pcl::PointIndices);
+    pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients);
+    pcl::PointCloud<PointT>::Ptr cloud_plane (new pcl::PointCloud<PointT> ());
+    seg.setOptimizeCoefficients (true);
+    seg.setModelType (pcl::SACMODEL_PLANE);
+    seg.setMethodType (pcl::SAC_RANSAC);
+    seg.setMaxIterations (100);
+    seg.setDistanceThreshold (0.02);
+
+    // Segment the largest planar component from the remaining cloud
+    seg.setInputCloud (cloud_filtered);
+    seg.segment (*inliers, *coefficients);
+    if (inliers->indices.size () == 0)
+    {
+        ROS_ERROR("%s: Failed to estimate the ground plane.", ros::this_node::getName().c_str());
+        return ret;
+    }
+
+    ROS_INFO("%s: cloud plane segmented", ros::this_node::getName().c_str());
+
+    // Extract the planar inliers from the input cloud
+    pcl::ExtractIndices<PointT> extract;
+    extract.setKeepOrganized(true);
+    extract.setInputCloud (cloud_filtered);
+    extract.setIndices (inliers);
+    extract.setNegative (false);
+
+    // Get the points associated with the planar surface
+    extract.filter (*cloud_plane);
+    std::cout << ros::this_node::getName() << ": PointCloud representing the planar component: " << cloud_plane->points.size () << " data points." << std::endl;
+
+    // Remove the planar inliers, extract the rest
+    extract.setNegative (true);
+    extract.filter (*cloud_f);
+    *cloud_filtered = *cloud_f;
+
+    int nanCount = 0;
+    for (pcl::PointCloud<PointT>::iterator it = cloud_filtered->begin(); it != cloud_filtered->end(); it++) {
+        if (!pcl_isfinite((*it).x) || !pcl_isfinite((*it).y) || !pcl_isfinite((*it).z)) {
+            nanCount += 1;
+        }
+    }
+
+    std::vector<int> indices;
+    pcl::removeNaNFromPointCloud(*cloud_filtered, *cloud_filtered, indices);
+
+    cout << "nan count: " << nanCount << endl;
+    cout << "filterd nans: " << indices.size() << endl;
+    cout << "inliers: " << inliers->indices.size() << endl;
+    cout << "size of cloud: " << cloud_filtered->points.size() << endl;
+    pcl::io::savePCDFile("cloud_after_nans.pcd", *cloud_filtered);
+
+    // Creating the KdTree object for the search method of the extraction
+    pcl::search::KdTree<PointT>::Ptr tree (new pcl::search::KdTree<PointT>);
+    tree->setInputCloud (cloud_filtered);
+
+    ROS_INFO("%s: kd-tree created", ros::this_node::getName().c_str());
+
+    std::vector<pcl::PointIndices> cluster_indices;
+    pcl::EuclideanClusterExtraction<PointT> ec;
+    ec.setClusterTolerance (0.02); // 2cm
+    ec.setMinClusterSize (0);
+    ec.setMaxClusterSize (125000);
+    ec.setSearchMethod (tree);
+    ec.setInputCloud (cloud_filtered);
+    ec.extract (cluster_indices);
+
+    pcl::PointCloud<PointT>::Ptr segmented_cloud(new pcl::PointCloud<PointT>);
+    *segmented_cloud = *cloud_;
+
+    std::vector<int> r;
+    std::vector<int> g;
+    std::vector<int> b;
+
+    std::vector<pair_type> all_cluster_indices;
+    for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it)
+    {
+        r.push_back(std::rand()%255);
+        g.push_back(std::rand()%255);
+        b.push_back(std::rand()%255);
+
+        for (std::vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); ++pit) {
+            all_cluster_indices.push_back(pair_type(*pit, r.size()-1));
+        }
+    }
+
+    cout << "All cluster indices: " << all_cluster_indices.size() << endl;
+
+    std::vector<int> inliers_vec = inliers->indices;
+    std::sort(inliers_vec.begin(), inliers_vec.end());
+    std::sort(all_cluster_indices.begin(), all_cluster_indices.end(), pair_comparator);
+    cout << "Cloud size: " << segmented_cloud->points.size() << "; Number of indices: " << indices.size()+all_cluster_indices.size() << endl;
+    cout << "start coloring clusters" << endl;
+    for (int i = 0; i < cloud_->size(); i++) {
+        if (inliers_vec.at(0) == i) {
+            inliers_vec.erase(inliers_vec.begin());
+        } else {
+            int cluster = all_cluster_indices.begin()->second;
+            segmented_cloud->at(i).r = r.at(cluster);
+            segmented_cloud->at(i).g = g.at(cluster);
+            segmented_cloud->at(i).b = b.at(cluster);
+            all_cluster_indices.erase(all_cluster_indices.begin());
+        }
+    }
+    pcl::io::savePNGFile("segmented_scene.png", *segmented_cloud);
+    pcl::io::savePCDFile("segmented_scene.pcd", *segmented_cloud);
+
+    std::vector<pcl::PointCloud<PointT>::Ptr> clusters;
     for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it)
     {
         pcl::PointCloud<PointT>::Ptr cloud_cluster (new pcl::PointCloud<PointT>);
         for (std::vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); ++pit)
-            cloud_cluster->points.push_back (cloud_->points[*pit]);
+            cloud_cluster->points.push_back (cloud_filtered->points[*pit]);
         cloud_cluster->header.frame_id="/kinect_depth_optical_frame";
         cloud_cluster->width = cloud_cluster->points.size ();
         cloud_cluster->height = 1;
@@ -80,7 +208,7 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
         std::cout << ros::this_node::getName() << "PointCloud representing the Cluster: " << cloud_cluster->points.size () << " data points." << std::endl;
     }
 
-    ROS_INFO("%s: found %d clusters", ros::this_node::getName().c_str(), (int)clusters.size());
+    ROS_INFO("%s: found all clusters", ros::this_node::getName().c_str());
 
     // transform to base, as this is more convenient to conduct sanity checks
     for(size_t i = 0; i < clusters.size(); i++)
@@ -93,6 +221,16 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
         pcl::computeMeanAndCovarianceMatrix(*clusters[i], covariance_matrix, centroid);
         if(isValidCluster(clusters[i], centroid))
         {
+            //      geometry_msgs::PoseStamped inMap = base_link2map(centroid[0], centroid[1], centroid[2]);
+            //      PersistentObject newObject(clusters[i], inMap.pose.position.x, inMap.pose.position.y, inMap.pose.position.z);
+            //      std::list<PersistentObject>::iterator knownObject = knownObjects.end();
+            //      for(std::list<PersistentObject>::iterator ot = knownObjects.begin(); ot != knownObjects.end(); ot++)
+            //        if(ot->isSame(newObject))
+            //          knownObject = ot;
+            //      if(knownObject == knownObjects.end())
+            //      {
+            //        knownObjects.push_back(newObject);
+            //        visualizePersistentObject(newObject);
             ROS_INFO("%s: found new object with %d points at (in base_link): (%.3f %.3f %.3f)",
                      ros::this_node::getName().c_str(), (int)clusters[i]->points.size(), centroid[0], centroid[1], centroid[2]);
 
@@ -106,8 +244,18 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
             results.back().distanceFromRobot = centroid[0];
             results.back().pose = poseKinect;
             pcl::toROSMsg(*clusters[i], results.back().points);
+            //      }
+            //      else
+            //      {
+            //        ROS_INFO("%s: found object with of size %.3f with %d points at (in base_link): (%.3f %.3f %.3f), which is the same as known object of size %.3f at (%.3f %.3f %.3f)",
+            //          ros::this_node::getName().c_str(),
+            //          newObject.size, (int)clusters[i]->points.size(), newObject.pos.x, newObject.pos.y, newObject.pos.z,
+            //          knownObject->size, knownObject->pos.x, knownObject->pos.y, knownObject->pos.z);
+            //      }
         }
     }
+
+    ROS_INFO("%s: done", ros::this_node::getName().c_str());
 
     ret = true;
 
@@ -294,6 +442,7 @@ void SegmentationPopoutNode::transformBase2Kinect(pcl::PointCloud<PointT>::Ptr &
     }
 }
 
+
 /**
  * Perform sanity checks to rule out stupid clusters like walls, people ..
  */
@@ -315,12 +464,13 @@ bool SegmentationPopoutNode::isValidCluster(pcl::PointCloud<PointT>::Ptr &cloud_
     return true;
 }
 
+
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "segmentation_popout");
     SegmentationPopoutNode seg;
     seg.initialize(argc, argv);
-    ros::spin();
 
     return 0;
 }
+

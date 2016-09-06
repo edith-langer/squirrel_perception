@@ -18,13 +18,16 @@
 #include <v4r/segmentation/pcl_segmentation_methods.h>
 #include <squirrel_object_perception_msgs/SegmentInit.h>
 #include <squirrel_object_perception_msgs/SegmentOnce.h>
+#include <pcl/io/png_io.h>
+#include <pcl/filters/passthrough.h>
 
 class SegmentationPopoutNode
 {
 private:
   typedef pcl::PointXYZRGB PointT;
+  typedef std::pair<int,int> pair_type;
   static const double MAX_OBJECT_DIST = 1.5;
-  static const double MAX_OBJECT_HEIGHT = 0.25;
+  static const double MAX_OBJECT_HEIGHT = 0.50;
 
   class PersistentObject
   {
@@ -106,6 +109,11 @@ private:
 
   bool segment(squirrel_object_perception_msgs::SegmentInit::Request & req, squirrel_object_perception_msgs::SegmentInit::Response & response);
   bool returnNextResult(squirrel_object_perception_msgs::SegmentOnce::Request & req, squirrel_object_perception_msgs::SegmentOnce::Response & response);
+
+  static bool pair_comparator ( const pair_type& l, const pair_type& r)
+  {
+      return l.first < r.first;
+  }
 
 public:
   SegmentationPopoutNode();

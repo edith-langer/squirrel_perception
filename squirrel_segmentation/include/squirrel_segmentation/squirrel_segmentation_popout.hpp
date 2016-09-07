@@ -19,7 +19,9 @@
 #include <squirrel_object_perception_msgs/SegmentInit.h>
 #include <squirrel_object_perception_msgs/SegmentOnce.h>
 #include <pcl/io/png_io.h>
-#include <pcl/filters/passthrough.h>
+#include <pcl/features/normal_3d.h>
+#include <pcl/segmentation/conditional_euclidean_clustering.h>
+#include <pcl/visualization/pcl_visualizer.h>
 
 class SegmentationPopoutNode
 {
@@ -106,6 +108,8 @@ private:
   void transformBase2Kinect(pcl::PointCloud<PointT>::Ptr &cloud_cluster);
   bool isValidCluster(pcl::PointCloud<PointT>::Ptr &cloud_cluster, Eigen::Vector4f &centroid);
   void visualizePersistentObject(PersistentObject &obj);
+
+  static bool customRegionGrowing (const pcl::PointXYZRGBNormal &point_a, const pcl::PointXYZRGBNormal &point_b, float squared_distance);
 
   bool segment(squirrel_object_perception_msgs::SegmentInit::Request & req, squirrel_object_perception_msgs::SegmentInit::Response & response);
   bool returnNextResult(squirrel_object_perception_msgs::SegmentOnce::Request & req, squirrel_object_perception_msgs::SegmentOnce::Response & response);

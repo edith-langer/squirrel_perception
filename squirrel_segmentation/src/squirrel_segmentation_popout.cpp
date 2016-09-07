@@ -61,6 +61,8 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
     pcl::fromROSMsg (req.cloud, *inCloud);
     cloud_ = inCloud->makeShared();
     //pcl::io::loadPCDFile("original_scene.pcd", *cloud_);
+
+    //pcl::io::loadPCDFile("/home/edith/SQUIRREL/Experiments/Octomap_IROS/clutter1/object1/waypoint1.pcd", *cloud_);
     if(cloud_->height == 1)
     {
         //this is a HACK for Gazebo
@@ -124,35 +126,76 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
     *cloud_filtered = *cloud_f;
 
     int nanCount = 0;
-    for (pcl::PointCloud<PointT>::iterator it = cloud_filtered->begin(); it != cloud_filtered->end(); it++) {
-        if (!pcl_isfinite((*it).x) || !pcl_isfinite((*it).y) || !pcl_isfinite((*it).z)) {
+    std::vector<int> nan_indices;
+    for (int i = 0; i < cloud_filtered->size(); i++) {
+        if (!pcl_isfinite(cloud_filtered->points[i].x) || !pcl_isfinite(cloud_filtered->points[i].y) || !pcl_isfinite(cloud_filtered->points[i].z)) {
             nanCount += 1;
+            nan_indices.push_back(i);
         }
     }
-
+    cout << "NANS: " << nanCount << endl;
     std::vector<int> indices;
+    cout << "cloud size before removing nans: " << cloud_filtered->size() << endl;
     pcl::removeNaNFromPointCloud(*cloud_filtered, *cloud_filtered, indices);
-
-    cout << "nan count: " << nanCount << endl;
-    cout << "filterd nans: " << indices.size() << endl;
-    cout << "inliers: " << inliers->indices.size() << endl;
-    cout << "size of cloud: " << cloud_filtered->points.size() << endl;
-    pcl::io::savePCDFile("cloud_after_nans.pcd", *cloud_filtered);
+    cout << "cloud size after removing nans: " << cloud_filtered->size() << endl;
 
     // Creating the KdTree object for the search method of the extraction
     pcl::search::KdTree<PointT>::Ptr tree (new pcl::search::KdTree<PointT>);
-    tree->setInputCloud (cloud_filtered);
 
-    ROS_INFO("%s: kd-tree created", ros::this_node::getName().c_str());
+    pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr cloud_with_normals(new pcl::PointCloud<pcl::PointXYZRGBNormal>);
+    ROS_INFO("Computing normals...\n");
+    pcl::copyPointCloud (*cloud_filtered, *cloud_with_normals);
+    pcl::NormalEstimation<PointT, pcl::PointXYZRGBNormal> ne;
+    ne.setInputCloud (cloud_filtered);
+    ne.setSearchMethod (tree);
+    ne.setRadiusSearch (0.01);
+    ne.compute (*cloud_with_normals);
 
-    std::vector<pcl::PointIndices> cluster_indices;
-    pcl::EuclideanClusterExtraction<PointT> ec;
-    ec.setClusterTolerance (0.02); // 2cm
-    ec.setMinClusterSize (0);
-    ec.setMaxClusterSize (125000);
-    ec.setSearchMethod (tree);
-    ec.setInputCloud (cloud_filtered);
-    ec.extract (cluster_indices);
+//    pcl::PointCloud<pcl::Normal>::Ptr just_normals(new pcl::PointCloud<pcl::Normal>);
+//    pcl::copyPointCloud(*cloud_with_normals, *just_normals);
+//    boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer ("3D Viewer"));
+//    viewer->setBackgroundColor (0, 0, 0);
+//    pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> rgb(cloud_filtered);
+//    viewer->addPointCloud<pcl::PointXYZRGB> (cloud_filtered, rgb, "sample cloud");
+//    viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "sample cloud");
+//    viewer->addPointCloudNormals<pcl::PointXYZRGB, pcl::Normal> (cloud_filtered, just_normals, 10, 0.05, "normals");
+//    viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 1.0, 1.0, "normals");
+//    viewer->addCoordinateSystem (1.0);
+//    viewer->initCameraParameters ();
+//    while (!viewer->wasStopped ())
+//     {
+//        viewer->spinOnce (100);
+//    }
+
+
+    // Set up a Conditional Euclidean Clustering class
+    pcl::IndicesClustersPtr eucl_clusters (new pcl::IndicesClusters), small_clusters (new pcl::IndicesClusters), large_clusters (new pcl::IndicesClusters);
+    ROS_INFO("Segmenting to clusters...\n");
+    pcl::ConditionalEuclideanClustering<pcl::PointXYZRGBNormal> cec (true);
+    cec.setInputCloud (cloud_with_normals);
+    cec.setConditionFunction (&customRegionGrowing);
+    cec.setClusterTolerance (0.02);
+    cec.setMinClusterSize (30);
+    cec.setMaxClusterSize (25000);
+    cec.segment (*eucl_clusters);
+    cec.getRemovedClusters (small_clusters, large_clusters);
+
+
+//    // Creating the KdTree object for the search method of the extraction
+//    pcl::search::KdTree<PointT>::Ptr tree (new pcl::search::KdTree<PointT>);
+//    tree->setInputCloud (cloud_filtered);
+//    ROS_INFO("%s: kd-tree created", ros::this_node::getName().c_str());
+
+//    std::vector<pcl::PointIndices> cluster_indices;
+//    pcl::EuclideanClusterExtraction<PointT> ec;
+//    ec.setClusterTolerance (0.02); // 2cm
+//    ec.setMinClusterSize (0);
+//    ec.setMaxClusterSize (125000);
+//    ec.setSearchMethod (tree);
+//    ec.setInputCloud (cloud_filtered);
+//    ec.extract (cluster_indices);
+
+    ROS_INFO("Finished Euclidean clustering");
 
     pcl::PointCloud<PointT>::Ptr segmented_cloud(new pcl::PointCloud<PointT>);
     *segmented_cloud = *cloud_;
@@ -162,40 +205,66 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
     std::vector<int> b;
 
     std::vector<pair_type> all_cluster_indices;
-    for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it)
+    std::vector<std::vector<int> > converted_clusters(eucl_clusters->size());
+    for (int i = 0; i < eucl_clusters->size(); i++)
     {
         r.push_back(std::rand()%255);
         g.push_back(std::rand()%255);
         b.push_back(std::rand()%255);
 
-        for (std::vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); ++pit) {
-            all_cluster_indices.push_back(pair_type(*pit, r.size()-1));
+        for (std::vector<int>::const_iterator pit = (*eucl_clusters)[i].indices.begin (); pit != (*eucl_clusters)[i].indices.end (); ++pit) {
+            all_cluster_indices.push_back(pair_type(*pit, i));
+        }
+        //converted_clusters.push_back(new pcl::PointIndices);
+    }
+
+    for (int i = 0; i < small_clusters->size(); i++) {
+        for (std::vector<int>::const_iterator pit = (*small_clusters)[i].indices.begin (); pit != (*small_clusters)[i].indices.end (); ++pit) {
+            all_cluster_indices.push_back(pair_type(*pit, -1));
         }
     }
 
-    cout << "All cluster indices: " << all_cluster_indices.size() << endl;
+    for (int i = 0; i < large_clusters->size(); i++) {
+        for (std::vector<int>::const_iterator pit = (*large_clusters)[i].indices.begin (); pit != (*large_clusters)[i].indices.end (); ++pit) {
+            all_cluster_indices.push_back(pair_type(*pit, -1));
+        }
+    }
 
-    std::vector<int> inliers_vec = inliers->indices;
-    std::sort(inliers_vec.begin(), inliers_vec.end());
+
+    cout << "All cluster indices: " << all_cluster_indices.size() << endl;
+    cout << "All nan indices: " << nan_indices.size() << endl;
+    cout << "Cloud size: " << cloud_->size() << endl;
+
+
+    std::sort(nan_indices.begin(), nan_indices.end());
     std::sort(all_cluster_indices.begin(), all_cluster_indices.end(), pair_comparator);
-    cout << "Cloud size: " << segmented_cloud->points.size() << "; Number of indices: " << indices.size()+all_cluster_indices.size() << endl;
+
+
     cout << "start coloring clusters" << endl;
     for (int i = 0; i < cloud_->size(); i++) {
-        if (inliers_vec.at(0) == i) {
-            inliers_vec.erase(inliers_vec.begin());
-        } else {
-            int cluster = all_cluster_indices.begin()->second;
+        if (nan_indices.size() != 0) {
+            if (nan_indices.at(0) == i) {
+                nan_indices.erase(nan_indices.begin());
+                continue;
+            }
+        }
+        //cout << "cloud index: " << i << "; cluster index: " << all_cluster_indices.begin()->first << endl;
+        int cluster = all_cluster_indices.begin()->second;
+        if (cluster != -1) {
             segmented_cloud->at(i).r = r.at(cluster);
             segmented_cloud->at(i).g = g.at(cluster);
             segmented_cloud->at(i).b = b.at(cluster);
-            all_cluster_indices.erase(all_cluster_indices.begin());
+
+            converted_clusters.at(cluster).push_back(i);
         }
+        all_cluster_indices.erase(all_cluster_indices.begin());
+
     }
     pcl::io::savePNGFile("segmented_scene.png", *segmented_cloud);
     pcl::io::savePCDFile("segmented_scene.pcd", *segmented_cloud);
 
     std::vector<pcl::PointCloud<PointT>::Ptr> clusters;
-    for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it)
+    for (std::vector<pcl::PointIndices>::const_iterator it = eucl_clusters->begin(); it != eucl_clusters->end(); ++it)
     {
         pcl::PointCloud<PointT>::Ptr cloud_cluster (new pcl::PointCloud<PointT>);
         for (std::vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); ++pit)
@@ -238,8 +307,8 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
             results.push_back(SegmentationResult());
             transformBase2Kinect(clusters[i]);
             geometry_msgs::PoseStamped poseKinect = base_link2kinect(centroid[0], centroid[1], centroid[2]);
-            for(size_t k = 0; k < cluster_indices[i].indices.size(); k++) {
-                results.back().indices.data.push_back(cluster_indices[i].indices[k]);
+            for(size_t k = 0; k < converted_clusters[i].size(); k++) {
+                results.back().indices.data.push_back(converted_clusters[i][k]);
             }
             results.back().distanceFromRobot = centroid[0];
             results.back().pose = poseKinect;
@@ -463,6 +532,43 @@ bool SegmentationPopoutNode::isValidCluster(pcl::PointCloud<PointT>::Ptr &cloud_
 
     return true;
 }
+
+bool SegmentationPopoutNode::customRegionGrowing (const pcl::PointXYZRGBNormal& point_a, const pcl::PointXYZRGBNormal& point_b, float squared_distance)
+{
+    Eigen::Map<const Eigen::Vector3f> point_a_normal = point_a.normal, point_b_normal = point_b.normal;
+
+    if (squared_distance < 0.00006) {
+        if (fabs (point_a_normal.dot (point_b_normal)) > 0.97) {
+            return (true);
+        }
+        if (fabs (std::sqrt(std::pow(point_a.r - point_b.r,2) + std::pow(point_a.g - point_b.g,2) + std::pow(point_a.b - point_b.b,2)) < 20.0f)) {
+            return (true);
+        }
+    } else {
+        if (fabs (point_a_normal.dot (point_b_normal)) > 0.95) {
+            return (true);
+        }
+        if (fabs (std::sqrt(std::pow(point_a.r - point_b.r,2) + std::pow(point_a.g - point_b.g,2) + std::pow(point_a.b - point_b.b,2)) < 25.0f)) {
+            return (true);
+        }
+    }
+
+//  if (squared_distance < 0.04)
+//  {
+//    //if (fabs (std::sqrt(std::pow(point_a.r - point_b.r,2) + std::pow(point_a.g - point_b.g,2) + std::pow(point_a.b - point_b.b,2)) < 10.0f))
+//    //  return (true);
+//    if (fabs (point_a_normal.dot (point_b_normal)) < 0.97)
+//      return (true);
+//  }
+//  else
+//  {
+//     // if (fabs (std::sqrt(std::pow(point_a.r - point_b.r,2) + std::pow(point_a.g - point_b.g,2) + std::pow(point_a.b - point_b.b,2)) < 15.0f))
+//     //   return (true);
+//  }
+//  return (false);
+    return false;
+}
+
 
 
 int main(int argc, char **argv)

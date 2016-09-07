@@ -31,6 +31,7 @@
 #include "mongodb_store/message_store.h"
 #include "OctomapLib.h"
 #include <pcl/io/png_io.h>
+#include <limits>
 
 
 class Object
@@ -47,6 +48,7 @@ class LookForObjectsAction
 protected:
 
     typedef pcl::PointXYZRGB PointT;
+    typedef std::pair<int,int> pair_type;
 
     ros::NodeHandle nh_;
     tf::TransformListener tf_listener;
@@ -337,6 +339,8 @@ protected:
             }
         }
 
+        //setPointsToNan(cloud);
+
         pcl::toROSMsg(*cloud, scene);
 
         //pcl::io::savePCDFileBinary("before_segmentation.pcd", *cloud);
@@ -407,35 +411,7 @@ protected:
                 obj.sceneObject.bounding_cylinder.diameter = diam;
                 obj.sceneObject.bounding_cylinder.height = z_diam;
                 this->objects.push_back(obj);
-
-//                pcl::PointCloud<PointT>::Ptr object_cloud(new pcl::PointCloud<PointT>);
-//                pcl::fromROSMsg(obj.sceneObject.cloud, *object_cloud);
-//                pcl::io::savePCDFile("object_cloud.pcd", *object_cloud);
-
-
-                //-----visualize the segmented object in the original point cloud
-                int r = std::rand()%255;
-                int g = std::rand()%255;
-                int b = std::rand()%255;
-
-                for(std::vector<int>::const_iterator it = obj.point_indices.data.begin(); it != obj.point_indices.data.end(); ++it) {
-                    original_scene->points.at(*it).r = r;
-                    original_scene->points.at(*it).g = g;
-                    original_scene->points.at(*it).b = b;
-                }
             }
-
-            if(original_scene->height == 1)
-            {
-                //this is a HACK for Gazebo
-                if(original_scene->points.size() == 640*480)
-                {
-                    original_scene->height = 480;
-                    original_scene->width = 640;
-                }
-            }
-            pcl::io::savePNGFile("segmented_scene.png", *original_scene);
-            pcl::io::savePCDFile("segmented_scene.pcd", *original_scene);
         }
 
         if (cnt == 0) {
@@ -467,6 +443,26 @@ protected:
         else
         {
             return false;
+        }
+    }
+
+    void setPointsToNan(pcl::PointCloud<PointT>::Ptr & cloud) {
+        for (size_t i = 0; i < cloud->points.size(); i++) {
+            if (!pcl_isfinite(cloud->points[i].x) || !pcl_isfinite(cloud->points[i].y) || !pcl_isfinite(cloud->points[i].z)) {
+                //NAN point
+            }
+            else {
+                octomap::OcTreeNode* node = staticMap->search(cloud->points[i].x, cloud->points[i].y, cloud->points[i].z);
+                if (node != NULL) {
+
+                    if(staticMap->isNodeOccupied(*node)) {
+                        cloud->points[i].x = std::numeric_limits<int>::quiet_NaN();
+                        cloud->points[i].y = std::numeric_limits<int>::quiet_NaN();
+                        cloud->points[i].z = std::numeric_limits<int>::quiet_NaN();
+                        std::cout << "set point to nan" << std::endl;
+                    }
+                }
+            }
         }
     }
 
@@ -675,6 +671,16 @@ public:
             return;
         }
 
+        if(original_scene->height == 1)
+        {
+            //this is a HACK for Gazebo
+            if(original_scene->points.size() == 640*480)
+            {
+                original_scene->height = 480;
+                original_scene->width = 640;
+            }
+        }
+
         std::cout << "Number of segmented objects: " << objects.size() << std::endl;
         for(objectIterator = objects.begin(); objectIterator != objects.end(); objectIterator++)
         {
@@ -685,15 +691,25 @@ public:
             } else {
                 (*objectIterator).rejected= false;
                 success = compareToDB((*objectIterator).sceneObject);
+
+                //-----visualize the segmented object in the original point cloud
+                int r = std::rand()%255;
+                int g = std::rand()%255;
+                int b = std::rand()%255;
+
+                for(std::vector<int>::const_iterator it = (*objectIterator).point_indices.data.begin(); it != (*objectIterator).point_indices.data.end(); ++it) {
+                    original_scene->points.at(*it).r = r;
+                    original_scene->points.at(*it).g = g;
+                    original_scene->points.at(*it).b = b;
+                }
             }
-
-
-
             visualizeObject((*objectIterator));
             //success = add_object_to_db((*objectIterator).sceneObject);
-            if (!success)
-                break;
+//            if (!success)
+//                break;
         }
+        pcl::io::savePNGFile("segmented_objects.png", *original_scene);
+        pcl::io::savePCDFile("segmented_objects.pcd", *original_scene);
 
         if(success)
         {

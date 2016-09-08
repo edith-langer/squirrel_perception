@@ -35,7 +35,7 @@ bool RemoveBackground::removeBackground (squirrel_object_perception_msgs::FindDy
     octomap::OcTree subtractedMapVar = subtractOctomaps();
     if (octomap_lib.getNumberOccupiedLeafNodes(&subtractedMapVar) == 0) {
         ROS_INFO("TUW: Static and current octomap are the same");
-        return false;
+        return true;
     }
 
 
@@ -49,7 +49,7 @@ bool RemoveBackground::removeBackground (squirrel_object_perception_msgs::FindDy
     pcl::PointCloud<PointT>::Ptr filtered_cloud = compareOctomapToGrid(subtractedMap, grid_map);
     if (filtered_cloud->size() == 0) {
         ROS_INFO("TUW: Current octomap and occupancy grid are very similar - no lump to detect");
-        return false;
+        return true;
     }
     pcl::io::savePCDFileASCII ("cloud_after_map_comp.pcd", *filtered_cloud);
 
@@ -107,7 +107,16 @@ bool RemoveBackground::removeBackground (squirrel_object_perception_msgs::FindDy
             if((std::abs(pose_db.position.x - pose_x) < POSE_THRESH) && (std::abs(pose_db.position.y - pose_y) < POSE_THRESH)
                     && (std::abs(pose_db.position.z - pose_z) < POSE_THRESH) ) {
                 if ((*sceneObject_db).category != "unknown") {
-                    response.dynamic_objects_removed.erase(response.dynamic_objects_removed.begin() + cnt);
+
+                    for (int i = 0; i < response.dynamic_objects_removed.size(); ++i)
+                    {
+                        if (response.dynamic_objects_removed[i].id == sceneObject_db->id)
+                        {
+                            response.dynamic_objects_removed.erase(response.dynamic_objects_removed.begin() + i);
+                            break;
+                        }
+                    }
+//                    response.dynamic_objects_removed.erase(response.dynamic_objects_removed.begin() + cnt);
                     is_lump_in_db = true;
                     is_classified = true;
                     ROS_INFO("TUW: Lump at pose (x,y,z) = (%f, %f, %f) is a classified object", pose_x, pose_y, pose_z);
@@ -118,7 +127,15 @@ bool RemoveBackground::removeBackground (squirrel_object_perception_msgs::FindDy
                     if ((std::abs(bCylinder.diameter - diam) < 0.0001) && (std::abs(bCylinder.height == z_diam) < 0.0001)) {
                         lump=(*sceneObject_db);
                         is_lump_in_db = true;
-                        response.dynamic_objects_removed.erase(response.dynamic_objects_removed.begin() + cnt);
+                        for (int i = 0; i < response.dynamic_objects_removed.size(); ++i)
+                        {
+                            if (response.dynamic_objects_removed[i].id == sceneObject_db->id)
+                            {
+                                response.dynamic_objects_removed.erase(response.dynamic_objects_removed.begin() + i);
+                                break;
+                            }
+                        }
+                        //response.dynamic_objects_removed.erase(response.dynamic_objects_removed.begin() + cnt);
                         ROS_INFO("TUW: Lump at pose (x,y,z) = (%f, %f, %f) is already as unknown object in DB", pose_x, pose_y, pose_z);
                     }
                     else {
@@ -139,7 +156,15 @@ bool RemoveBackground::removeBackground (squirrel_object_perception_msgs::FindDy
 
                         is_lump_in_db = true;
                         response.dynamic_objects_updated.push_back(lump);
-                        response.dynamic_objects_removed.erase(response.dynamic_objects_removed.begin() + cnt);
+                        for (int i = 0; i < response.dynamic_objects_removed.size(); ++i)
+                        {
+                            if (response.dynamic_objects_removed[i].id == sceneObject_db->id)
+                            {
+                                response.dynamic_objects_removed.erase(response.dynamic_objects_removed.begin() + i);
+                                break;
+                            }
+                        }
+                        //response.dynamic_objects_removed.erase(response.dynamic_objects_removed.begin() + cnt);
 
                         ROS_INFO("TUW: Lump at pose (x,y,z) = (%f, %f, %f) got updated in DB", pose_x, pose_y, pose_z);
                     }
@@ -445,7 +470,7 @@ std::vector<pcl::PointCloud<PointT>::Ptr> RemoveBackground::removeClusters(pcl::
             //cout << "Max point: " << max_p.z << endl;
 
             //check if bounding box is above floor or is too tall
-            if (min_p.z > octomap_lib.leaf_size + octomap_lib.leaf_size/2 + 0.0001|| max_p.z >= 0.5 || max_p.z <= 2* octomap_lib.leaf_size) { //max_p.z <= 0.05 should not be needed when camera is calibrated well
+            if (min_p.z > octomap_lib.leaf_size + octomap_lib.leaf_size/2 + 0.0001|| max_p.z >= 0.5) {// || max_p.z <= 2* octomap_lib.leaf_size) { //max_p.z <= 0.05 should not be needed when camera is calibrated well
                 //cout << "bad cluster" << endl;
             } else {
                 *cloud_filtered += *cloud_cluster;

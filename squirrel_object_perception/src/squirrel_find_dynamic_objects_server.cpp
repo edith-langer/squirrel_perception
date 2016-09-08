@@ -51,14 +51,18 @@ bool RemoveBackground::removeBackground (squirrel_object_perception_msgs::FindDy
         ROS_INFO("TUW: Current octomap and occupancy grid are very similar - no lump to detect");
         return false;
     }
-    pcl::io::savePCDFileASCII ("cloud_after_map_comp.pcd", *filtered_cloud);
+    if (filtered_cloud->size() > 0) {
+        pcl::io::savePCDFileASCII ("cloud_after_map_comp.pcd", *filtered_cloud);
+    }
 
 
     //pcl::PointCloud<PointT>::Ptr filtered_cloud(new pcl::PointCloud<PointT>);
     //octomap_lib.octomapToPointcloud(subtractedMap, filtered_cloud);
     //clustering, remove noise and cluster which are not connected to the floor
     std::vector<pcl::PointCloud<PointT>::Ptr> clusters = removeClusters(filtered_cloud);
-    //pcl::io::savePCDFileASCII ("cloud_final.pcd", *filtered_cloud);
+    if (filtered_cloud->size() > 0) {
+        pcl::io::savePCDFileASCII ("cloud_final.pcd", *filtered_cloud);
+    }
 
     //Response added, updated and removed objects
     int cnt = 0;
@@ -370,6 +374,12 @@ void RemoveBackground::compareCloudToMap(pcl::PointCloud<PointT>::Ptr &cloud, co
     /// Apply the dilation operation
     cv::dilate( grid_mat, grid_mat, element );
 
+    cv::imwrite("2d_grid.png", grid_mat);
+
+        cv::Mat scaledMat;
+        grid_mat.convertTo(scaledMat,CV_8U,255.0/(100));
+        cv::imwrite("2d_grid_scaled.png", scaledMat);
+
     //    cv::Mat scaledMat;
     //    grid_mat.convertTo(scaledMat,CV_8U,255.0/(100));
     //    cv::imshow( "Dilation Demo", scaledMat );
@@ -445,7 +455,7 @@ std::vector<pcl::PointCloud<PointT>::Ptr> RemoveBackground::removeClusters(pcl::
             cout << "Max point: " << max_p.z << endl;
 
             //check if bounding box is above floor or is too tall
-            if (min_p.z > octomap_lib.leaf_size + octomap_lib.leaf_size/2 + 0.0001|| max_p.z >= 0.5) { //|| max_p.z <= 2* octomap_lib.leaf_size) { //max_p.z <= 0.05 should not be needed when camera is calibrated well
+            if (min_p.z > octomap_lib.leaf_size + octomap_lib.leaf_size/2 + 0.0001|| max_p.z >= 0.5) {//|| max_p.z <= 2* octomap_lib.leaf_size) { //max_p.z <= 0.05 should not be needed when camera is calibrated well
                 cout << "bad cluster" << endl;
             } else {
                 *cloud_filtered += *cloud_cluster;

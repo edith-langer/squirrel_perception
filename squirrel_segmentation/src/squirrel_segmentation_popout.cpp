@@ -127,7 +127,7 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
 
     int nanCount = 0;
     std::vector<int> nan_indices;
-    for (int i = 0; i < cloud_filtered->size(); i++) {
+    for (size_t i = 0; i < cloud_filtered->size(); i++) {
         if (!pcl_isfinite(cloud_filtered->points[i].x) || !pcl_isfinite(cloud_filtered->points[i].y) || !pcl_isfinite(cloud_filtered->points[i].z)) {
             nanCount += 1;
             nan_indices.push_back(i);
@@ -206,7 +206,7 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
 
     std::vector<pair_type> all_cluster_indices;
     std::vector<std::vector<int> > converted_clusters(eucl_clusters->size());
-    for (int i = 0; i < eucl_clusters->size(); i++)
+    for (size_t i = 0; i < eucl_clusters->size(); i++)
     {
         r.push_back(std::rand()%255);
         g.push_back(std::rand()%255);
@@ -218,13 +218,13 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
         //converted_clusters.push_back(new pcl::PointIndices);
     }
 
-    for (int i = 0; i < small_clusters->size(); i++) {
+    for (size_t i = 0; i < small_clusters->size(); i++) {
         for (std::vector<int>::const_iterator pit = (*small_clusters)[i].indices.begin (); pit != (*small_clusters)[i].indices.end (); ++pit) {
             all_cluster_indices.push_back(pair_type(*pit, -1));
         }
     }
 
-    for (int i = 0; i < large_clusters->size(); i++) {
+    for (size_t i = 0; i < large_clusters->size(); i++) {
         for (std::vector<int>::const_iterator pit = (*large_clusters)[i].indices.begin (); pit != (*large_clusters)[i].indices.end (); ++pit) {
             all_cluster_indices.push_back(pair_type(*pit, -1));
         }
@@ -241,7 +241,7 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
 
 
     cout << "start coloring clusters" << endl;
-    for (int i = 0; i < cloud_->size(); i++) {
+    for (size_t i = 0; i < cloud_->size(); i++) {
         if (nan_indices.size() != 0) {
             if (nan_indices.at(0) == i) {
                 nan_indices.erase(nan_indices.begin());

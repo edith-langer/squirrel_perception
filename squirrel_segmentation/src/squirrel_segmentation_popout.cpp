@@ -58,11 +58,11 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
 
     pcl::PointCloud<PointT>::Ptr inCloud(new pcl::PointCloud<PointT>());
     //TODO change back
-    pcl::fromROSMsg (req.cloud, *inCloud);
-    cloud_ = inCloud->makeShared();
-    //pcl::io::loadPCDFile("original_scene.pcd", *cloud_);
+    //pcl::fromROSMsg (req.cloud, *inCloud);
+    //cloud_ = inCloud->makeShared();
+    //pcl::io::loadPCDFile("gazebo_scene.pcd", *cloud_);
 
-    //pcl::io::loadPCDFile("/home/edith/SQUIRREL/Experiments/Octomap_IROS/clutter1/object1/waypoint1.pcd", *cloud_);
+    pcl::io::loadPCDFile("/home/edith/SQUIRREL/Experiments/Octomap_IROS/clutter1/object1/waypoint1.pcd", *cloud_);
     if(cloud_->height == 1)
     {
         //this is a HACK for Gazebo
@@ -196,6 +196,7 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
 //    ec.extract (cluster_indices);
 
     ROS_INFO("Finished Euclidean clustering");
+    ROS_INFO("Number of small clusteres: %zu; Number of large clusteres: %zu", small_clusters->size(), large_clusters->size());
 
     pcl::PointCloud<PointT>::Ptr segmented_cloud(new pcl::PointCloud<PointT>);
     *segmented_cloud = *cloud_;
@@ -537,18 +538,23 @@ bool SegmentationPopoutNode::customRegionGrowing (const pcl::PointXYZRGBNormal& 
 {
     Eigen::Map<const Eigen::Vector3f> point_a_normal = point_a.normal, point_b_normal = point_b.normal;
 
-    if (squared_distance < 0.00006) {
-        if (fabs (point_a_normal.dot (point_b_normal)) > 0.97) {
+    if (squared_distance < 0.0003) {
+        if (fabs (point_a_normal.dot (point_b_normal)) > 0.99) {
+            //ROS_INFO("Normal small");
             return (true);
+
         }
-        if (fabs (std::sqrt(std::pow(point_a.r - point_b.r,2) + std::pow(point_a.g - point_b.g,2) + std::pow(point_a.b - point_b.b,2)) < 20.0f)) {
+        if (fabs (std::sqrt(std::pow(point_a.r - point_b.r,2) + std::pow(point_a.g - point_b.g,2) + std::pow(point_a.b - point_b.b,2)) < 8.0f)) {
+            //ROS_INFO("Color small");
             return (true);
         }
     } else {
-        if (fabs (point_a_normal.dot (point_b_normal)) > 0.95) {
+        if (fabs (point_a_normal.dot (point_b_normal)) > 0.97) {
+            //ROS_INFO("Normal large");
             return (true);
         }
-        if (fabs (std::sqrt(std::pow(point_a.r - point_b.r,2) + std::pow(point_a.g - point_b.g,2) + std::pow(point_a.b - point_b.b,2)) < 25.0f)) {
+        if (fabs (std::sqrt(std::pow(point_a.r - point_b.r,2) + std::pow(point_a.g - point_b.g,2) + std::pow(point_a.b - point_b.b,2)) < 12.0f)) {
+            //ROS_INFO("Color large");
             return (true);
         }
     }

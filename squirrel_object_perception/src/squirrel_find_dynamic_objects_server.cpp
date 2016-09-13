@@ -31,6 +31,7 @@ bool RemoveBackground::removeBackground (squirrel_object_perception_msgs::FindDy
     }
 //    zyl_marker.action = 3; //DELETEALL
 //    markerPublisher.publish(zyl_marker);
+    vis_marker_ids.clear();
 
     octomap::OcTree subtractedMapVar = subtractOctomaps();
     if (octomap_lib.getNumberOccupiedLeafNodes(&subtractedMapVar) == 0) {

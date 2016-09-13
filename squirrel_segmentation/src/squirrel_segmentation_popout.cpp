@@ -58,11 +58,10 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
 
     pcl::PointCloud<PointT>::Ptr inCloud(new pcl::PointCloud<PointT>());
     //TODO change back
-    //pcl::fromROSMsg (req.cloud, *inCloud);
-    //cloud_ = inCloud->makeShared();
+    pcl::fromROSMsg (req.cloud, *inCloud);
+    cloud_ = inCloud->makeShared();
     //pcl::io::loadPCDFile("gazebo_scene.pcd", *cloud_);
-
-    pcl::io::loadPCDFile("/home/edith/SQUIRREL/Experiments/Octomap_IROS/clutter1/object1/waypoint1.pcd", *cloud_);
+    //pcl::io::loadPCDFile("/home/edith/SQUIRREL/Experiments/Octomap_IROS/clutter1/object1/waypoint1.pcd", *cloud_);
     if(cloud_->height == 1)
     {
         //this is a HACK for Gazebo

@@ -80,6 +80,7 @@ bool CreateExamineWaypoint::createExamineWaypoints(squirrel_waypoint_msgs::Exami
 
         resp.poses.push_back(waypoint);
     }
+    ROS_INFO("Created waypoints");
     visualizeWayPoints(req, resp);
     return true;
 

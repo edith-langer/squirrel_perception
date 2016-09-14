@@ -9,10 +9,12 @@ RemoveBackground::RemoveBackground() : n_(new ros::NodeHandle("~")), message_sto
 RemoveBackground::~RemoveBackground() {
     if (n_)
         delete n_;
+    statistics_file.close();
 }
 
 bool RemoveBackground::removeBackground (squirrel_object_perception_msgs::FindDynamicObjects::Request & request, squirrel_object_perception_msgs::FindDynamicObjects::Response & response) {
 
+    {pcl::ScopeTime overallTime("Service call");
     //read the input
     octomap_msgs::OctomapConstPtr current_octomap_msg = ros::topic::waitForMessage<octomap_msgs::Octomap>("/octomap_binary", *n_, ros::Duration(10));
     setCurrentOctomap(dynamic_cast<octomap::OcTree*>(octomap_msgs::msgToMap(*current_octomap_msg)));
@@ -237,7 +239,12 @@ bool RemoveBackground::removeBackground (squirrel_object_perception_msgs::FindDy
     ROS_INFO("TUW: Added %zu lumps", response.dynamic_objects_added.size());
     ROS_INFO("TUW: Updated %zu lumps", response.dynamic_objects_updated.size());
     ROS_INFO("TUW: Removed %zu lumps", response.dynamic_objects_removed.size());
+
+    statistics_file << overallTime.getTime() << ";" << currentMap->size() << ";" << clusters.size() << "\n"; //nr nodes
+    statistics_file.flush();
+
     return true;
+    }
 }
 
 void RemoveBackground::initialize(int argc, char **argv) {
@@ -286,6 +293,8 @@ void RemoveBackground::initialize(int argc, char **argv) {
 
     //    message_store.insert(test_lump);
 
+    statistics_file.open("find_objects_statistic.txt", std::ofstream::out | std::ofstream::trunc);
+    statistics_file << "Time for subtraction; Time for comparing cloud against 2D grid; Time to cluster and filter; overall time; number of nodes in current octomap; Number of clusters\n";
 
     Remover_ = n_->advertiseService ("/squirrel_find_dynamic_objects", &RemoveBackground::removeBackground, this);
 
@@ -321,9 +330,11 @@ void RemoveBackground::setCurrentOctomap(octomap::OcTree *currentMap) {
 octomap::OcTree RemoveBackground::subtractOctomaps() {
     cout << "Start subtracting..." << endl;
     {pcl::ScopeTime time("Subtracting ");
-        return octomap_lib.subtractOctomap(staticMap, *currentMap);
+        octomap::OcTree result = octomap_lib.subtractOctomap(staticMap, *currentMap);
+        statistics_file << time.getTime() << ";";
+        cout << "Finished subtracting" << endl;
+        return result;
     }
-    cout << "Finished subtracting" << endl;
 }
 
 pcl::PointCloud<PointT>::Ptr RemoveBackground::compareOctomapToGrid(octomap::OcTree *octomap, const nav_msgs::OccupancyGridConstPtr& grid_map) {
@@ -333,6 +344,7 @@ pcl::PointCloud<PointT>::Ptr RemoveBackground::compareOctomapToGrid(octomap::OcT
         octomap_lib.octomapToPointcloud(octomap, cloud);
         this->compareCloudToMap(cloud, grid_map);
         cout << "Finished comparing octomap to gridmap" << endl;
+        statistics_file << time.getTime() << ";";
         return cloud;
     }
 }
@@ -490,6 +502,7 @@ std::vector<pcl::PointCloud<PointT>::Ptr> RemoveBackground::removeClusters(pcl::
         }
         cloud = cloud_filtered;
         cout << "Finished clustering and removing..." << endl;
+        statistics_file << time.getTime() << ";";
         return clusters;
     }
 }

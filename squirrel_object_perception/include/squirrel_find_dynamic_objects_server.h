@@ -34,6 +34,8 @@
 #include "squirrel_object_perception_msgs/FindDynamicObjects.h"
 #include <boost/foreach.hpp>
 #include "mongodb_store/message_store.h"
+#include <iostream>
+#include <fstream>
 
 typedef pcl::PointXYZRGB PointT;
 const double POSE_THRESH = 0.10; //5 cm
@@ -61,6 +63,8 @@ private:
     int id_cnt_;
 
     std::vector<int32_t> vis_marker_ids;
+
+    std::ofstream statistics_file;
 
     inline bool ends_with(std::string const & value, std::string const & ending)
     {

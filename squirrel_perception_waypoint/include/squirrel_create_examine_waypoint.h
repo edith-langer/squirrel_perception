@@ -19,8 +19,7 @@
 
 class CreateExamineWaypoint {
 
-    static const double distance_to_lump = 0.40; //in meters
-    static const int nr_of_waypoints = 5;
+
 
 private:
     ros::ServiceServer examineWaypointsServer;
@@ -28,6 +27,9 @@ private:
 
     ros::Publisher markerPublisher;
     ros::Publisher posePublisher;
+
+    double distance_to_lump; //in meters
+    int nr_of_waypoints;
 
 public:
     CreateExamineWaypoint ();

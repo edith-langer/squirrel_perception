@@ -119,6 +119,7 @@ private:
       return l.first < r.first;
   }
 
+
 public:
   SegmentationPopoutNode();
   ~SegmentationPopoutNode();

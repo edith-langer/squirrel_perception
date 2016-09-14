@@ -70,6 +70,7 @@ protected:
     std::vector<squirrel_object_perception_msgs::RecognizeResponse> recognized_object;
     std::vector<std_msgs::Int32MultiArray> cluster_indices;
     int id_cnt_;
+    int file_cnt_;
 
     bool is_in_DB;
 
@@ -101,6 +102,13 @@ protected:
         return (std::string("object") + str);
     }
 
+    std::string get_unique_filename() {
+        std::stringstream ss;
+        ss << file_cnt_;
+        std::string str = ss.str();
+        file_cnt_++;
+        return (std::string("scene_") + str);
+    }
 
     bool setup_visualization()
     {
@@ -534,6 +542,7 @@ public:
     {
 
         objects.clear();
+        std::string filename = get_unique_filename();
 
         sensor_msgs::PointCloud2ConstPtr sceneConst;
         ROS_INFO("%s: executeCB started", action_name_.c_str());
@@ -681,6 +690,9 @@ public:
             }
         }
 
+        pcl::io::savePNGFile(filename + std::string("_original.png"), *original_scene, "rgb");
+        pcl::io::savePCDFile(filename + std::string("_original.pcd"), *original_scene);
+
         std::cout << "Number of segmented objects: " << objects.size() << std::endl;
         for(objectIterator = objects.begin(); objectIterator != objects.end(); objectIterator++)
         {
@@ -708,8 +720,8 @@ public:
 //            if (!success)
 //                break;
         }
-        pcl::io::savePNGFile("segmented_objects.png", *original_scene);
-        pcl::io::savePCDFile("segmented_objects.pcd", *original_scene);
+        pcl::io::savePNGFile(filename + std::string("_segmented.png"), *original_scene, "rgb");
+        pcl::io::savePCDFile(filename + std::string("_segmented.pcd"), *original_scene);
 
         if(success)
         {

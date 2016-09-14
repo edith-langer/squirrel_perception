@@ -72,7 +72,6 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
         }
     }
 
-
     pcl::PointCloud<PointT>::Ptr cloud_f (new pcl::PointCloud<PointT>);
 
     // Create the filtering object: downsample the dataset using a leaf size of 1cm
@@ -197,25 +196,25 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
     ROS_INFO("Finished Euclidean clustering");
     ROS_INFO("Number of small clusteres: %zu; Number of large clusteres: %zu", small_clusters->size(), large_clusters->size());
 
+    //--------------For visualization------------------------------
     pcl::PointCloud<PointT>::Ptr segmented_cloud(new pcl::PointCloud<PointT>);
     *segmented_cloud = *cloud_;
 
-    std::vector<int> r;
-    std::vector<int> g;
-    std::vector<int> b;
+//    std::vector<int> r;
+//    std::vector<int> g;
+//    std::vector<int> b;
 
     std::vector<pair_type> all_cluster_indices;
     std::vector<std::vector<int> > converted_clusters(eucl_clusters->size());
     for (size_t i = 0; i < eucl_clusters->size(); i++)
     {
-        r.push_back(std::rand()%255);
-        g.push_back(std::rand()%255);
-        b.push_back(std::rand()%255);
+//        r.push_back(std::rand()%255);
+//        g.push_back(std::rand()%255);
+//        b.push_back(std::rand()%255);
 
         for (std::vector<int>::const_iterator pit = (*eucl_clusters)[i].indices.begin (); pit != (*eucl_clusters)[i].indices.end (); ++pit) {
             all_cluster_indices.push_back(pair_type(*pit, i));
         }
-        //converted_clusters.push_back(new pcl::PointIndices);
     }
 
     for (size_t i = 0; i < small_clusters->size(); i++) {
@@ -240,7 +239,7 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
     std::sort(all_cluster_indices.begin(), all_cluster_indices.end(), pair_comparator);
 
 
-    cout << "start coloring clusters" << endl;
+    //cout << "start coloring clusters" << endl;
     for (size_t i = 0; i < cloud_->size(); i++) {
         if (nan_indices.size() != 0) {
             if (nan_indices.at(0) == i) {
@@ -251,17 +250,18 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
         //cout << "cloud index: " << i << "; cluster index: " << all_cluster_indices.begin()->first << endl;
         int cluster = all_cluster_indices.begin()->second;
         if (cluster != -1) {
-            segmented_cloud->at(i).r = r.at(cluster);
-            segmented_cloud->at(i).g = g.at(cluster);
-            segmented_cloud->at(i).b = b.at(cluster);
+//            segmented_cloud->at(i).r = r.at(cluster);
+//            segmented_cloud->at(i).g = g.at(cluster);
+//            segmented_cloud->at(i).b = b.at(cluster);
 
             converted_clusters.at(cluster).push_back(i);
         }
         all_cluster_indices.erase(all_cluster_indices.begin());
 
     }
-    pcl::io::savePNGFile("segmented_scene.png", *segmented_cloud);
-    pcl::io::savePCDFile("segmented_scene.pcd", *segmented_cloud);
+
+//    pcl::io::savePNGFile(filename + std::string("_segmented.png"), *segmented_cloud, "rgb");
+//    pcl::io::savePCDFile(filename + std::string("_segmented.pcd"), *segmented_cloud);
 
     std::vector<pcl::PointCloud<PointT>::Ptr> clusters;
     for (std::vector<pcl::PointIndices>::const_iterator it = eucl_clusters->begin(); it != eucl_clusters->end(); ++it)
@@ -529,6 +529,14 @@ bool SegmentationPopoutNode::isValidCluster(pcl::PointCloud<PointT>::Ptr &cloud_
             z_max = cloud_cluster->points[i].z;
     if(z_max > MAX_OBJECT_HEIGHT)
         return false;
+
+    //reject objects that are cutted off in z-direction --> NOT WORKING
+    PointT min_p_cluster, max_p_cluster, min_p_cloud, max_p_cloud;
+    pcl::getMinMax3D(*cloud_cluster, min_p_cluster, max_p_cluster);
+    pcl::getMinMax3D(*cloud_, min_p_cloud, max_p_cloud);
+    if (max_p_cluster.z==max_p_cloud.z) {
+        return false;
+    }
 
     return true;
 }

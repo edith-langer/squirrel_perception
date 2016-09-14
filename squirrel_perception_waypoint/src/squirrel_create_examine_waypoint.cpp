@@ -18,6 +18,9 @@ void CreateExamineWaypoint::initialize(int argc, char **argv) {
     markerPublisher = n_->advertise<visualization_msgs::MarkerArray>("marker_perc_waypoints", 0);
     posePublisher = n_->advertise<geometry_msgs::PoseArray>("pose_perc_waypoints", 0);
 
+    n_->getParam("nr_waypoints", nr_of_waypoints);
+    n_->getParam("distance_to_lump", distance_to_lump);
+
     ROS_INFO ("Ready to get service calls...");
     ros::spin ();
 }

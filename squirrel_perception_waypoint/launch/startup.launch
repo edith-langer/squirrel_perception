@@ -3,7 +3,8 @@
   <node name="squirrel_perception_waypoints_server"
         pkg="squirrel_perception_waypoint"
         type="squirrel_perception_waypoints_server" 
-        required="true">
+        required="true"
+	output="screen">
 	<param name="nr_waypoints" value="5" type="int" />
 	<param name="distance_to_lump" value="0.60" type="double" />
   </node>

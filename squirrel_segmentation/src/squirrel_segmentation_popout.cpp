@@ -71,7 +71,7 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
             cloud_->width = 640;
         }
     }
-
+    ROS_INFO("Input cloud is in %s frame", inCloud->header.frame_id.c_str());
     pcl::PointCloud<PointT>::Ptr cloud_f (new pcl::PointCloud<PointT>);
 
     // Create the filtering object: downsample the dataset using a leaf size of 1cm
@@ -269,7 +269,7 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
         pcl::PointCloud<PointT>::Ptr cloud_cluster (new pcl::PointCloud<PointT>);
         for (std::vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); ++pit)
             cloud_cluster->points.push_back (cloud_filtered->points[*pit]);
-        cloud_cluster->header.frame_id="/kinect_depth_optical_frame";
+        cloud_cluster->header.frame_id=cloud_filtered->header.frame_id;
         cloud_cluster->width = cloud_cluster->points.size ();
         cloud_cluster->height = 1;
         cloud_cluster->is_dense = true;
@@ -281,8 +281,7 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
 
     // transform to base, as this is more convenient to conduct sanity checks
     for(size_t i = 0; i < clusters.size(); i++) {
-        ROS_INFO("Cluster frame: %s", clusters[i]->header.frame_id.c_str());
-        transformPointCloud(clusters[i],clusters[i]->header.frame_id, "base_link");
+        transformPointCloud(clusters[i],clusters[i]->header.frame_id, "/base_link");
     }
 
     for(size_t i = 0; i < clusters.size(); i++)
@@ -294,8 +293,6 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
 
         pcl::io::savePCDFile(ss.str(), *clusters[i]);
         pcl::computeMeanAndCovarianceMatrix(*clusters[i], covariance_matrix, centroid);
-        ROS_INFO("Cluster frame: %s", clusters[i]->header.frame_id.c_str());
-        ROS_INFO("Cluster centroid x: %f", centroid[0]);
         if(isValidCluster(clusters[i], centroid, converted_clusters[i]))
         {
             //      geometry_msgs::PoseStamped inMap = base_link2map(centroid[0], centroid[1], centroid[2]);
@@ -541,19 +538,19 @@ bool SegmentationPopoutNode::isValidCluster(pcl::PointCloud<PointT>::Ptr &cloud_
 {
     // reject objects too far away (e.g. the wall when looking straight)
     // NOTE: cluster is in base_link frame, with x pointing forward, z up
-//    if(centroid[0] > MAX_OBJECT_DIST) {
-//        ROS_INFO("Cluster too far away from robot");
-//        return false;
-//    }
+    if(centroid[0] > MAX_OBJECT_DIST) {
+        ROS_INFO("Cluster too far away from robot");
+        return false;
+    }
     // reject objects thare are too tall, e.g. people, walls
-//    double z_max = 0.;
-//    for(size_t i = 0; i < cloud_cluster->points.size(); i++)
-//        if(cloud_cluster->points[i].z > z_max)
-//            z_max = cloud_cluster->points[i].z;
-//    if(z_max > MAX_OBJECT_HEIGHT) {
-//        ROS_INFO("Cluster higher than %f", MAX_OBJECT_HEIGHT);
-//        return false;
-//    }
+    double z_max = 0.;
+    for(size_t i = 0; i < cloud_cluster->points.size(); i++)
+        if(cloud_cluster->points[i].z > z_max)
+            z_max = cloud_cluster->points[i].z;
+    if(z_max > MAX_OBJECT_HEIGHT) {
+        ROS_INFO("Cluster higher than %f", MAX_OBJECT_HEIGHT);
+        return false;
+    }
 
 //    //reject objects that are at the border of an image
 //    int row, col;

@@ -479,13 +479,11 @@ protected:
         int overlappingPoints = 0;
         pcl::PointCloud<PointT>::Ptr cloud(new pcl::PointCloud<PointT>);
         pcl::fromROSMsg(sceneObject.cloud, *cloud);
-        ROS_INFO("Number of nodes in static octomap: %d", staticMap->size());
         for (size_t i = 0; i < cloud->points.size(); i++) {
             octomap::OcTreeNode* node = staticMap->search(cloud->points[i].x, cloud->points[i].y, cloud->points[i].z);
             if (node != NULL) {
                 if(staticMap->isNodeOccupied(*node)) {
                     overlappingPoints++;
-                    ROS_INFO("overlapping point");
                 }
             }
         }

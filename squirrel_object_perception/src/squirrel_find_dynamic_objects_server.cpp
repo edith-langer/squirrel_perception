@@ -295,7 +295,7 @@ void RemoveBackground::initialize(int argc, char **argv) {
 
     statistics_file.open("find_objects_statistic.txt", std::ofstream::out | std::ofstream::trunc);
     statistics_file << "Time for subtraction; Time for comparing cloud against 2D grid; Time to cluster and filter; overall time; number of nodes in current octomap; Number of clusters\n";
-
+    statistics_file.flush();
     Remover_ = n_->advertiseService ("/squirrel_find_dynamic_objects", &RemoveBackground::removeBackground, this);
 
     ROS_INFO ("TUW: /squirrel_find_dynamic_objects ready to get service calls...");

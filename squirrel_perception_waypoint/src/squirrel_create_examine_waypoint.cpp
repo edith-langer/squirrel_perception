@@ -18,10 +18,9 @@ void CreateExamineWaypoint::initialize(int argc, char **argv) {
     markerPublisher = n_->advertise<visualization_msgs::MarkerArray>("marker_perc_waypoints", 0);
     posePublisher = n_->advertise<geometry_msgs::PoseArray>("pose_perc_waypoints", 0);
 
-    n_->getParam("nr_waypoints", nr_of_waypoints);
-    n_->getParam("distance_to_lump", distance_to_lump);
+    n_->getParam("/squirrel_perception_waypoints_server/nr_waypoints", nr_of_waypoints);
+    n_->getParam("/squirrel_perception_waypoints_server/distance_to_lump", distance_to_lump);
 
-    ROS_INFO ("Ready to get service calls...");
     ros::spin ();
 }
 
@@ -34,7 +33,11 @@ bool CreateExamineWaypoint::createExamineWaypoints(squirrel_waypoint_msgs::Exami
     //circle around lump
     tf::Transform tf;
     geometry_msgs::PoseStamped lump_pose = req.object_pose;
+    std::cout << "Number of waypoints: " << nr_of_waypoints << "; Distance to lump: " << distance_to_lump << std::endl;
+    nr_of_waypoints = 5;
+    distance_to_lump = 0.6;
 
+    std::cout << "x: " << lump_pose.pose.position.x << "; y: " << lump_pose.pose.position.y<< "; z: " << lump_pose.pose.position.z<< std::endl;
     float angle = 2*M_PI/(float)nr_of_waypoints;
 
     for(int i=0;i<nr_of_waypoints;i++)

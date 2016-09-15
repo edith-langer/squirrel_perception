@@ -280,13 +280,19 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
     ROS_INFO("%s: found all clusters", ros::this_node::getName().c_str());
 
     // transform to base, as this is more convenient to conduct sanity checks
-    for(size_t i = 0; i < clusters.size(); i++)
-        transformCluster2base_link(clusters[i]);
+    for(size_t i = 0; i < clusters.size(); i++) {
+        ROS_INFO("Cluster frame: %s", clusters[i]->header.frame_id.c_str());
+        transformPointCloud(clusters[i],clusters[i]->header.frame_id, "base_link");
+    }
 
     for(size_t i = 0; i < clusters.size(); i++)
     {
         Eigen::Vector4f centroid;
         Eigen::Matrix3f covariance_matrix;
+        stringstream ss;
+        ss << "cluster" << i << ".pcd";
+
+        pcl::io::savePCDFile(ss.str(), *clusters[i]);
         pcl::computeMeanAndCovarianceMatrix(*clusters[i], covariance_matrix, centroid);
         ROS_INFO("Cluster frame: %s", clusters[i]->header.frame_id.c_str());
         ROS_INFO("Cluster centroid x: %f", centroid[0]);
@@ -470,6 +476,19 @@ geometry_msgs::PoseStamped SegmentationPopoutNode::transform(double x, double y,
     return after;
 }
 
+//transforms a whole point cloud and saves the result in the same object
+void SegmentationPopoutNode::transformPointCloud(pcl::PointCloud<PointT>::Ptr &cloud_cluster, const std::string &from, const std::string &to) {
+    try
+    {
+        tf_listener.waitForTransform(from, to, ros::Time::now(), ros::Duration(1.0));
+        pcl_ros::transformPointCloud(to, *cloud_cluster, *cloud_cluster, tf_listener);
+    }
+    catch (tf::TransformException& ex)
+    {
+        ROS_ERROR("%s: %s", ros::this_node::getName().c_str(), ex.what());
+    }
+}
+
 /**
  * Transform a cluster from kinect to base coordinates.
  * NOTE: I am not sure if this is really efficient.
@@ -527,29 +546,29 @@ bool SegmentationPopoutNode::isValidCluster(pcl::PointCloud<PointT>::Ptr &cloud_
 //        return false;
 //    }
     // reject objects thare are too tall, e.g. people, walls
-    double z_max = 0.;
-    for(size_t i = 0; i < cloud_cluster->points.size(); i++)
-        if(cloud_cluster->points[i].z > z_max)
-            z_max = cloud_cluster->points[i].z;
-    if(z_max > MAX_OBJECT_HEIGHT) {
-        ROS_INFO("Cluster higher than %d", MAX_OBJECT_HEIGHT);
-        return false;
-    }
+//    double z_max = 0.;
+//    for(size_t i = 0; i < cloud_cluster->points.size(); i++)
+//        if(cloud_cluster->points[i].z > z_max)
+//            z_max = cloud_cluster->points[i].z;
+//    if(z_max > MAX_OBJECT_HEIGHT) {
+//        ROS_INFO("Cluster higher than %f", MAX_OBJECT_HEIGHT);
+//        return false;
+//    }
 
-    //reject objects that are at the border of an image
-    int row, col;
-    int cnt_border_points = 0;
-    for (size_t i = 0; i < cluster_indices.size(); i++) {
-        col=i % cloud_->width;
-        row=i / cloud_->width;
-        if (row < 5 || row > cloud_->height-5 || col < 5 || col > cloud_->width-5) {
-            cnt_border_points+=1;
-        }
-    }
-    if (cnt_border_points > 5) {
-        //return false;
-    }
-    ROS_INFO("Valid cluster");
+//    //reject objects that are at the border of an image
+//    int row, col;
+//    int cnt_border_points = 0;
+//    for (size_t i = 0; i < cluster_indices.size(); i++) {
+//        col=i % cloud_->width;
+//        row=i / cloud_->width;
+//        if (row < 5 || row > cloud_->height-5 || col < 5 || col > cloud_->width-5) {
+//            cnt_border_points+=1;
+//        }
+//    }
+//    if (cnt_border_points > 5) {
+//        //return false;
+//    }
+//    ROS_INFO("Valid cluster");
     return true;
 }
 

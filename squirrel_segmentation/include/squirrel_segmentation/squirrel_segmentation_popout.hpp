@@ -104,6 +104,7 @@ private:
   geometry_msgs::PoseStamped base_link2kinect(double x, double y, double z);
   geometry_msgs::PoseStamped base_link2map(double x, double y, double z);
   geometry_msgs::PoseStamped transform(double x, double y, double z, const std::string &from, const std::string &to);
+  void transformPointCloud(pcl::PointCloud<PointT>::Ptr &cloud_cluster, const std::string &from, const std::string &to);
   void transformCluster2base_link(pcl::PointCloud<PointT>::Ptr &cloud_cluster);
   void transformBase2Kinect(pcl::PointCloud<PointT>::Ptr &cloud_cluster);
   bool isValidCluster(pcl::PointCloud<PointT>::Ptr &cloud_cluster, Eigen::Vector4f &centroid, std::vector<int> &cluster_indices);

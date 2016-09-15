@@ -65,6 +65,9 @@ private:
     std::vector<int32_t> vis_marker_ids;
 
     std::ofstream statistics_file;
+    //Time for subtraction; Time for comparing cloud against 2D grid; Time to cluster and filter; overall time; number of nodes in current octomap; Number of clusters
+    int t_differencing, t_comp2D, t_cluster;
+
 
     inline bool ends_with(std::string const & value, std::string const & ending)
     {

@@ -479,11 +479,13 @@ protected:
         int overlappingPoints = 0;
         pcl::PointCloud<PointT>::Ptr cloud(new pcl::PointCloud<PointT>);
         pcl::fromROSMsg(sceneObject.cloud, *cloud);
+        ROS_INFO("Number of nodes in static octomap: %d", staticMap->size());
         for (size_t i = 0; i < cloud->points.size(); i++) {
             octomap::OcTreeNode* node = staticMap->search(cloud->points[i].x, cloud->points[i].y, cloud->points[i].z);
             if (node != NULL) {
                 if(staticMap->isNodeOccupied(*node)) {
                     overlappingPoints++;
+                    ROS_INFO("overlapping point");
                 }
             }
         }
@@ -541,6 +543,9 @@ public:
     void executeCB(const squirrel_object_perception_msgs::LookForObjectsGoalConstPtr &goal)
     {
 
+        if (staticMap == NULL) {
+            initializeOctomap();
+        }
         objects.clear();
         std::string filename = get_unique_filename();
 
@@ -586,9 +591,7 @@ public:
                 if(message_store.queryNamed<squirrel_object_perception_msgs::SceneObject>(goal->id, results)) {
                     if(results.size()<1) { // no results
                         ROS_INFO("TUW: look_for_objects_server is EXPLORING");
-                        if (staticMap == NULL) {
-                            initializeOctomap();
-                        }
+
                         ROS_INFO("There is nothing in the Database with ID %s. Use the whole scene for segmentation", (goal->id).c_str());
                     } else {
                         ROS_INFO("TUW: look_for_objects_server is CHECKING");
@@ -606,9 +609,6 @@ public:
                             transformPointCloud(lump, lump->header.frame_id, "/kinect_depth_optical_frame");
                             pcl::getMinMax3D(*lump, min_p, max_p);
 
-                            std::cout << "Size from DB: " << "X(" << min_p.x << ";" << max_p.x << ")" <<
-                                         " Y(" << min_p.y << ";" << max_p.y << ")" <<
-                                         " Z(" << min_p.z << ";" << max_p.z << ")";
                         } else {
                             ROS_INFO("Use bounding cylinder to crop point cloud");
                             min_p.x = sceneObject.pose.position.x - sceneObject.bounding_cylinder.diameter/2;
@@ -618,25 +618,26 @@ public:
                             min_p.z = 0;
                             max_p.z = sceneObject.bounding_cylinder.height;
 
+                            transformPointCloud(cloud, cloud->header.frame_id, "/map");
+
                             std::cout << "Pose x: " << sceneObject.pose.position.x << "; y: " << sceneObject.pose.position.y << std::endl;
 
-                            std::cout << "Size: " << "X(" << min_p.x << ";" << max_p.x << ")" <<
-                                         " Y(" << min_p.y << ";" << max_p.y << ")" <<
-                                         " Z(" << min_p.z << ";" << max_p.z << ")" << std::endl;
                         }
 
-
+                        std::cout << "Size: " << "X(" << min_p.x << ";" << max_p.x << ")" <<
+                                     " Y(" << min_p.y << ";" << max_p.y << ")" <<
+                                     " Z(" << min_p.z << ";" << max_p.z << ")" << std::endl;
 
 
                         //TODO maybe add some buffer to the min/max points if segmentation method was not accurate
-                        pcl::PassThrough<PointT> pass(true);
+                        pcl::PassThrough<PointT> pass;
                         pass.setKeepOrganized(true);
                         pass.setFilterFieldName("x");
-                        pass.setFilterLimits(min_p.x-0.05, max_p.x+0.05);
+                        pass.setFilterLimits(min_p.x-0.10, max_p.x+0.10);
                         pass.setInputCloud(cloud);
                         pass.filter(*cloud);
                         pass.setFilterFieldName("y");
-                        pass.setFilterLimits(min_p.y-0.05, max_p.y+0.05);
+                        pass.setFilterLimits(min_p.y-0.10, max_p.y+0.10);
                         pass.setInputCloud(cloud);
                         pass.filter(*cloud);
                         pass.setFilterFieldName("z");
@@ -644,27 +645,20 @@ public:
                         pass.setInputCloud(cloud);
                         pass.filter(*cloud);
 
-                        pass.filter(cutted_cloud_indices);
+                        //pass.filter(cutted_cloud_indices);
 
 
-                        pcl::PCDWriter writer;
-                        writer.write<PointT>("cutted_scene.pcd", *cloud, false);
+                        pcl::io::savePCDFile("cutted_scene.pcd", *cloud);
 
                         pcl::toROSMsg(*cloud, scene);
                     }
                 }
                 else {
                     ROS_INFO("TUW: look_for_objects_server is EXPLORING");
-                    if (staticMap == NULL) {
-                        initializeOctomap();
-                    }
                     ROS_INFO("There is nothing in the Database with ID %s. Use the whole scene for segmentation", (goal->id).c_str());
                 }
             } else { //EXPLORING
                 ROS_INFO("TUW: look_for_objects_server is EXPLORING");
-                if (staticMap == NULL) {
-                    initializeOctomap();
-                }
             }
         }
         else

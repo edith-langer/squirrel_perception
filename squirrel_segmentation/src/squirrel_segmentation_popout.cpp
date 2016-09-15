@@ -60,7 +60,7 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
     //TODO change back
     pcl::fromROSMsg (req.cloud, *inCloud);
     cloud_ = inCloud->makeShared();
-    //pcl::io::loadPCDFile("gazebo_scene.pcd", *cloud_);
+    //pcl::io::loadPCDFile("cutted_scene.pcd", *cloud_);
     //pcl::io::loadPCDFile("/home/edith/SQUIRREL/Experiments/Octomap_IROS/clutter1/object1/waypoint1.pcd", *cloud_);
     if(cloud_->height == 1)
     {
@@ -200,17 +200,17 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
     pcl::PointCloud<PointT>::Ptr segmented_cloud(new pcl::PointCloud<PointT>);
     *segmented_cloud = *cloud_;
 
-//    std::vector<int> r;
-//    std::vector<int> g;
-//    std::vector<int> b;
+    std::vector<int> r;
+    std::vector<int> g;
+    std::vector<int> b;
 
     std::vector<pair_type> all_cluster_indices;
     std::vector<std::vector<int> > converted_clusters(eucl_clusters->size());
     for (size_t i = 0; i < eucl_clusters->size(); i++)
     {
-//        r.push_back(std::rand()%255);
-//        g.push_back(std::rand()%255);
-//        b.push_back(std::rand()%255);
+        r.push_back(std::rand()%255);
+        g.push_back(std::rand()%255);
+        b.push_back(std::rand()%255);
 
         for (std::vector<int>::const_iterator pit = (*eucl_clusters)[i].indices.begin (); pit != (*eucl_clusters)[i].indices.end (); ++pit) {
             all_cluster_indices.push_back(pair_type(*pit, i));
@@ -250,9 +250,9 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
         //cout << "cloud index: " << i << "; cluster index: " << all_cluster_indices.begin()->first << endl;
         int cluster = all_cluster_indices.begin()->second;
         if (cluster != -1) {
-//            segmented_cloud->at(i).r = r.at(cluster);
-//            segmented_cloud->at(i).g = g.at(cluster);
-//            segmented_cloud->at(i).b = b.at(cluster);
+            segmented_cloud->at(i).r = r.at(cluster);
+            segmented_cloud->at(i).g = g.at(cluster);
+            segmented_cloud->at(i).b = b.at(cluster);
 
             converted_clusters.at(cluster).push_back(i);
         }
@@ -260,8 +260,8 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
 
     }
 
-//    pcl::io::savePNGFile(filename + std::string("_segmented.png"), *segmented_cloud, "rgb");
-//    pcl::io::savePCDFile(filename + std::string("_segmented.pcd"), *segmented_cloud);
+    pcl::io::savePNGFile(std::string("_segmented.png"), *segmented_cloud, "rgb");
+    pcl::io::savePCDFile(std::string("_segmented.pcd"), *segmented_cloud);
 
     std::vector<pcl::PointCloud<PointT>::Ptr> clusters;
     for (std::vector<pcl::PointIndices>::const_iterator it = eucl_clusters->begin(); it != eucl_clusters->end(); ++it)
@@ -288,7 +288,9 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
         Eigen::Vector4f centroid;
         Eigen::Matrix3f covariance_matrix;
         pcl::computeMeanAndCovarianceMatrix(*clusters[i], covariance_matrix, centroid);
-        if(isValidCluster(clusters[i], centroid))
+        ROS_INFO("Cluster frame: %s", clusters[i]->header.frame_id.c_str());
+        ROS_INFO("Cluster centroid x: %f", centroid[0]);
+        if(isValidCluster(clusters[i], centroid, converted_clusters[i]))
         {
             //      geometry_msgs::PoseStamped inMap = base_link2map(centroid[0], centroid[1], centroid[2]);
             //      PersistentObject newObject(clusters[i], inMap.pose.position.x, inMap.pose.position.y, inMap.pose.position.z);
@@ -333,6 +335,7 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
 
 bool SegmentationPopoutNode::returnNextResult(squirrel_object_perception_msgs::SegmentOnce::Request & req, squirrel_object_perception_msgs::SegmentOnce::Response & response)
 {
+    ROS_INFO("%s: Number of returnable clusters: %d", ros::this_node::getName().c_str(), results.size());
     double x_min = 1000.;
     size_t selected = results.size();
     std::cout << results.size();
@@ -477,7 +480,7 @@ void SegmentationPopoutNode::transformCluster2base_link(pcl::PointCloud<PointT>:
 {
     try
     {
-        tf_listener.waitForTransform("/kinect_depth_optical_frame","/base_link", ros::Time::now(), ros::Duration(0.2));
+        tf_listener.waitForTransform(cloud_cluster->header.frame_id,"/base_link", ros::Time::now(), ros::Duration(0.2));
         pcl_ros::transformPointCloud("/base_link", *cloud_cluster, *cloud_cluster, tf_listener);
         //    for(size_t i = 0; i < cloud_cluster->points.size(); i++)
         //    {
@@ -515,29 +518,38 @@ void SegmentationPopoutNode::transformBase2Kinect(pcl::PointCloud<PointT>::Ptr &
 /**
  * Perform sanity checks to rule out stupid clusters like walls, people ..
  */
-bool SegmentationPopoutNode::isValidCluster(pcl::PointCloud<PointT>::Ptr &cloud_cluster, Eigen::Vector4f &centroid)
+bool SegmentationPopoutNode::isValidCluster(pcl::PointCloud<PointT>::Ptr &cloud_cluster, Eigen::Vector4f &centroid, std::vector<int> &cluster_indices)
 {
     // reject objects too far away (e.g. the wall when looking straight)
     // NOTE: cluster is in base_link frame, with x pointing forward, z up
-    if(centroid[0] > MAX_OBJECT_DIST)
-        return false;
-
+//    if(centroid[0] > MAX_OBJECT_DIST) {
+//        ROS_INFO("Cluster too far away from robot");
+//        return false;
+//    }
     // reject objects thare are too tall, e.g. people, walls
     double z_max = 0.;
     for(size_t i = 0; i < cloud_cluster->points.size(); i++)
         if(cloud_cluster->points[i].z > z_max)
             z_max = cloud_cluster->points[i].z;
-    if(z_max > MAX_OBJECT_HEIGHT)
-        return false;
-
-    //reject objects that are cutted off in z-direction --> NOT WORKING
-    PointT min_p_cluster, max_p_cluster, min_p_cloud, max_p_cloud;
-    pcl::getMinMax3D(*cloud_cluster, min_p_cluster, max_p_cluster);
-    pcl::getMinMax3D(*cloud_, min_p_cloud, max_p_cloud);
-    if (max_p_cluster.z==max_p_cloud.z) {
+    if(z_max > MAX_OBJECT_HEIGHT) {
+        ROS_INFO("Cluster higher than %d", MAX_OBJECT_HEIGHT);
         return false;
     }
 
+    //reject objects that are at the border of an image
+    int row, col;
+    int cnt_border_points = 0;
+    for (size_t i = 0; i < cluster_indices.size(); i++) {
+        col=i % cloud_->width;
+        row=i / cloud_->width;
+        if (row < 5 || row > cloud_->height-5 || col < 5 || col > cloud_->width-5) {
+            cnt_border_points+=1;
+        }
+    }
+    if (cnt_border_points > 5) {
+        //return false;
+    }
+    ROS_INFO("Valid cluster");
     return true;
 }
 

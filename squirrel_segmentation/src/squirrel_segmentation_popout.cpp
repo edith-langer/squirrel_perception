@@ -137,6 +137,11 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
     pcl::removeNaNFromPointCloud(*cloud_filtered, *cloud_filtered, indices);
     cout << "cloud size after removing nans: " << cloud_filtered->size() << endl;
 
+    if (cloud_filtered->size() == 0) {
+        ROS_INFO("Empty cloud afte removing the plane");
+        return true;
+    }
+
     // Creating the KdTree object for the search method of the extraction
     pcl::search::KdTree<PointT>::Ptr tree (new pcl::search::KdTree<PointT>);
 

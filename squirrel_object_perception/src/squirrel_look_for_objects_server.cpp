@@ -422,12 +422,13 @@ protected:
             }
         }
 
-        if (cnt == 0) {
-            ROS_ERROR("Failed to call service %s", "/squirrel_segmentation_incremental_once.");
-            return false;
-        } else {
-            return true;
-        }
+//        if (cnt == 0) {
+//            ROS_ERROR("Failed to call service %s", "/squirrel_segmentation_incremental_once.");
+//            return false;
+//        } else {
+//            return true;
+//        }
+        return true;
     }
 
     bool update_object_in_db(squirrel_object_perception_msgs::SceneObject sceneObject)
@@ -686,7 +687,7 @@ public:
         if (objects.size() < 1)
         {
             result_.result_status = "No objects classified";
-            as_.setAborted(result_);
+            as_.setSucceeded(result_);
             return;
         }
 

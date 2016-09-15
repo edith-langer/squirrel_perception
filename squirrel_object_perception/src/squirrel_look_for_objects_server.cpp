@@ -605,7 +605,7 @@ public:
                             pcl::PointCloud<PointT>::Ptr lump(new pcl::PointCloud<PointT>);
                             pcl::fromROSMsg(sceneObject.cloud, *lump);
 
-                            transformPointCloud(lump, lump->header.frame_id, "/kinect_depth_optical_frame");
+                            transformPointCloud(lump, lump->header.frame_id, "/map");
                             pcl::getMinMax3D(*lump, min_p, max_p);
 
                         } else {
@@ -617,11 +617,11 @@ public:
                             min_p.z = 0;
                             max_p.z = sceneObject.bounding_cylinder.height;
 
-                            transformPointCloud(cloud, cloud->header.frame_id, "/map");
-
                             std::cout << "Pose x: " << sceneObject.pose.position.x << "; y: " << sceneObject.pose.position.y << std::endl;
 
                         }
+
+                        transformPointCloud(cloud, cloud->header.frame_id, "/map");
 
                         std::cout << "Size: " << "X(" << min_p.x << ";" << max_p.x << ")" <<
                                      " Y(" << min_p.y << ";" << max_p.y << ")" <<

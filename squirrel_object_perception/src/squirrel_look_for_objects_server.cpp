@@ -596,17 +596,35 @@ public:
                         pcl::PointCloud<PointT>::Ptr cloud(new pcl::PointCloud<PointT>);
                         pcl::fromROSMsg(scene, *cloud);
 
-                        pcl::PointCloud<PointT>::Ptr lump(new pcl::PointCloud<PointT>);
-                        pcl::fromROSMsg(sceneObject.cloud, *lump);
-
-                        transformPointCloud(lump, lump->header.frame_id, "/kinect_depth_optical_frame");
-
                         PointT min_p, max_p;
-                        pcl::getMinMax3D(*lump, min_p, max_p);
+                        //if lump was already segmented once
+                        if (sceneObject.cloud.width > 0) {
+                            ROS_INFO("We already have a cloud of the lump");
+                            pcl::PointCloud<PointT>::Ptr lump(new pcl::PointCloud<PointT>);
+                            pcl::fromROSMsg(sceneObject.cloud, *lump);
 
-                        std::cout << "Size from DB: " << "X(" << min_p.x << ";" << max_p.x << ")" <<
-                                     " Y(" << min_p.y << ";" << max_p.y << ")" <<
-                                     " Z(" << min_p.z << ";" << max_p.z << ")";
+                            transformPointCloud(lump, lump->header.frame_id, "/kinect_depth_optical_frame");
+                            pcl::getMinMax3D(*lump, min_p, max_p);
+
+                            std::cout << "Size from DB: " << "X(" << min_p.x << ";" << max_p.x << ")" <<
+                                         " Y(" << min_p.y << ";" << max_p.y << ")" <<
+                                         " Z(" << min_p.z << ";" << max_p.z << ")";
+                        } else {
+                            ROS_INFO("Use bounding cylinder to crop point cloud");
+                            min_p.x = sceneObject.pose.position.x - sceneObject.bounding_cylinder.diameter/2;
+                            max_p.x = sceneObject.pose.position.x + sceneObject.bounding_cylinder.diameter/2;
+                            min_p.y = sceneObject.pose.position.y - sceneObject.bounding_cylinder.diameter/2;
+                            max_p.y = sceneObject.pose.position.y + sceneObject.bounding_cylinder.diameter/2;
+                            min_p.z = 0;
+                            max_p.z = sceneObject.bounding_cylinder.height;
+
+                            std::cout << "Pose x: " << sceneObject.pose.position.x << "; y: " << sceneObject.pose.position.y << std::endl;
+
+                            std::cout << "Size: " << "X(" << min_p.x << ";" << max_p.x << ")" <<
+                                         " Y(" << min_p.y << ";" << max_p.y << ")" <<
+                                         " Z(" << min_p.z << ";" << max_p.z << ")" << std::endl;
+                        }
+
 
 
 
@@ -629,8 +647,8 @@ public:
                         pass.filter(cutted_cloud_indices);
 
 
-//                        pcl::PCDWriter writer;
-//                        writer.write<PointT>("cutted_scene.pcd", *cloud, false);
+                        pcl::PCDWriter writer;
+                        writer.write<PointT>("cutted_scene.pcd", *cloud, false);
 
                         pcl::toROSMsg(*cloud, scene);
                     }

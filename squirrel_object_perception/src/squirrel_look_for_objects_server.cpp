@@ -391,6 +391,7 @@ protected:
                 obj.rejected = false;
                 obj.sceneObject.category = "unknown";
                 obj.sceneObject.id = get_unique_object_id();
+                ROS_INFO("The id of the segmented object is %s", obj.sceneObject.id.c_str());
                 obj.sceneObject.header.frame_id = "/map";
                 obj.point_indices = srv.response.clusters_indices[i];
                 obj.sceneObject.cloud = srv.response.points[i];
@@ -647,7 +648,7 @@ public:
                         //pass.filter(cutted_cloud_indices);
 
 
-                        pcl::io::savePCDFile("cutted_scene.pcd", *cloud);
+                        pcl::io::savePCDFile("cutted_scene_filename.pcd", *cloud);
 
                         pcl::toROSMsg(*cloud, scene);
                     }
@@ -733,6 +734,8 @@ public:
         }
         pcl::io::savePNGFile(filename + std::string("_segmented.png"), *original_scene, "rgb");
         pcl::io::savePCDFile(filename + std::string("_segmented.pcd"), *original_scene);
+
+        success = true;
 
         if(success)
         {

@@ -102,7 +102,8 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
     if (inliers->indices.size () == 0)
     {
         ROS_ERROR("%s: Failed to estimate the ground plane.", ros::this_node::getName().c_str());
-        return ret;
+        //return ret;
+        return true;
     }
 
     ROS_INFO("%s: cloud plane segmented", ros::this_node::getName().c_str());
@@ -310,8 +311,8 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
             //      {
             //        knownObjects.push_back(newObject);
             //        visualizePersistentObject(newObject);
-            ROS_INFO("%s: found new object with %d points at (in base_link): (%.3f %.3f %.3f)",
-                     ros::this_node::getName().c_str(), (int)clusters[i]->points.size(), centroid[0], centroid[1], centroid[2]);
+            ROS_INFO("%s: found new object with %zu points at (in base_link): (%.3f %.3f %.3f)",
+                     ros::this_node::getName().c_str(), clusters[i]->points.size(), centroid[0], centroid[1], centroid[2]);
 
             // save the valid results of the current segmentation, to be returned incrementally lalter
             results.push_back(SegmentationResult());
@@ -343,7 +344,7 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
 
 bool SegmentationPopoutNode::returnNextResult(squirrel_object_perception_msgs::SegmentOnce::Request & req, squirrel_object_perception_msgs::SegmentOnce::Response & response)
 {
-    ROS_INFO("%s: Number of returnable clusters: %d", ros::this_node::getName().c_str(), results.size());
+    ROS_INFO("%s: Number of returnable clusters: %zu", ros::this_node::getName().c_str(), results.size());
     double x_min = 1000.;
     size_t selected = results.size();
     std::cout << results.size();
@@ -361,7 +362,7 @@ bool SegmentationPopoutNode::returnNextResult(squirrel_object_perception_msgs::S
     }
     if(selected < results.size())
     {
-        ROS_INFO("%s: returning cluster with %d points", ros::this_node::getName().c_str(), (int)results[selected].indices.data.size());
+        ROS_INFO("%s: returning cluster with %zu points", ros::this_node::getName().c_str(), results[selected].indices.data.size());
         results[selected].alreadyReturned = true;
         response.clusters_indices.push_back(results[selected].indices);
         response.poses.push_back(results[selected].pose);
@@ -557,20 +558,21 @@ bool SegmentationPopoutNode::isValidCluster(pcl::PointCloud<PointT>::Ptr &cloud_
         return false;
     }
 
-//    //reject objects that are at the border of an image
-//    int row, col;
-//    int cnt_border_points = 0;
-//    for (size_t i = 0; i < cluster_indices.size(); i++) {
-//        col=i % cloud_->width;
-//        row=i / cloud_->width;
-//        if (row < 5 || row > cloud_->height-5 || col < 5 || col > cloud_->width-5) {
-//            cnt_border_points+=1;
-//        }
-//    }
-//    if (cnt_border_points > 5) {
-//        //return false;
-//    }
-//    ROS_INFO("Valid cluster");
+    //reject objects that are at the border of an image
+    int row, col;
+    int cnt_border_points = 0;
+    for (size_t i = 0; i < cluster_indices.size(); i++) {
+        col=i % cloud_->width;
+        row=i / cloud_->width;
+        if (row < 5 || row > cloud_->height-5 || col < 5 || col > cloud_->width-5) {
+            cnt_border_points+=1;
+        }
+    }
+    if (cnt_border_points > 5) {
+        ROS_INFO("Object at border - gets rejected");
+        return false;
+    }
+    ROS_INFO("Valid cluster");
     return true;
 }
 

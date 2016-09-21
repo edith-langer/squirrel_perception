@@ -71,6 +71,7 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
             cloud_->width = 640;
         }
     }
+
     ROS_INFO("Input cloud is in %s frame", inCloud->header.frame_id.c_str());
     pcl::PointCloud<PointT>::Ptr cloud_f (new pcl::PointCloud<PointT>);
 
@@ -562,12 +563,16 @@ bool SegmentationPopoutNode::isValidCluster(pcl::PointCloud<PointT>::Ptr &cloud_
     int row, col;
     int cnt_border_points = 0;
     for (size_t i = 0; i < cluster_indices.size(); i++) {
-        col=i % cloud_->width;
-        row=i / cloud_->width;
+        col = cluster_indices[i] % cloud_->width;
+        row = cluster_indices[i] / cloud_->width;
+        if (row > 480) {
+            ROS_INFO("Something weird");
+        }
         if (row < 5 || row > cloud_->height-5 || col < 5 || col > cloud_->width-5) {
             cnt_border_points+=1;
         }
     }
+    ROS_INFO("Number of border points: %d", cnt_border_points);
     if (cnt_border_points > 5) {
         ROS_INFO("Object at border - gets rejected");
         return false;
@@ -616,7 +621,6 @@ bool SegmentationPopoutNode::customRegionGrowing (const pcl::PointXYZRGBNormal& 
 //  return (false);
     return false;
 }
-
 
 
 int main(int argc, char **argv)

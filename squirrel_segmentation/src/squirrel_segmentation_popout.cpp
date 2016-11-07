@@ -560,15 +560,12 @@ bool SegmentationPopoutNode::isValidCluster(pcl::PointCloud<PointT>::Ptr &cloud_
     }
 
     //reject objects that are at the border of an image
-    int row, col;
+    /*int row, col;
     int cnt_border_points = 0;
     for (size_t i = 0; i < cluster_indices.size(); i++) {
         col = cluster_indices[i] % cloud_->width;
         row = cluster_indices[i] / cloud_->width;
-        if (row > 480) {
-            ROS_INFO("Something weird");
-        }
-        if (row < 5 || row > cloud_->height-5 || col < 5 || col > cloud_->width-5) {
+        if (row < 2 || row > cloud_->height-2 || col < 2 || col > cloud_->width-2) {
             cnt_border_points+=1;
         }
     }
@@ -576,7 +573,7 @@ bool SegmentationPopoutNode::isValidCluster(pcl::PointCloud<PointT>::Ptr &cloud_
     if (cnt_border_points > 5) {
         ROS_INFO("Object at border - gets rejected");
         return false;
-    }
+    }*/
     ROS_INFO("Valid cluster");
     return true;
 }

@@ -28,7 +28,7 @@ class SegmentationPopoutNode
 private:
   typedef pcl::PointXYZRGB PointT;
   typedef std::pair<int,int> pair_type;
-  static const double MAX_OBJECT_DIST = 1.5;
+  static const double MAX_OBJECT_DIST = 2.5;
   static const double MAX_OBJECT_HEIGHT = 0.50;
 
   class PersistentObject

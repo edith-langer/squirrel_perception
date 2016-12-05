@@ -60,7 +60,7 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
     //TODO change back
     pcl::fromROSMsg (req.cloud, *inCloud);
     cloud_ = inCloud->makeShared();
-    //pcl::io::loadPCDFile("cutted_scene.pcd", *cloud_);
+    //pcl::io::loadPCDFile("/home/edith/.ros/just_floor.pcd", *cloud_);
     //pcl::io::loadPCDFile("/home/edith/SQUIRREL/Experiments/Octomap_IROS/clutter1/object1/waypoint1.pcd", *cloud_);
     if(cloud_->height == 1)
     {
@@ -73,57 +73,17 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
     }
 
     ROS_INFO("Input cloud is in %s frame", inCloud->header.frame_id.c_str());
-    pcl::PointCloud<PointT>::Ptr cloud_f (new pcl::PointCloud<PointT>);
 
     // Create the filtering object: downsample the dataset using a leaf size of 1cm
-    pcl::VoxelGrid<PointT> vg;
     pcl::PointCloud<PointT>::Ptr cloud_filtered (new pcl::PointCloud<PointT>);
-//    vg.setInputCloud (cloud_);
-//    vg.setLeafSize (0.01f, 0.01f, 0.01f);
-//    vg.filter (*cloud_filtered);
     *cloud_filtered = *cloud_;
 
-    ROS_INFO("%s: cloud filtered", ros::this_node::getName().c_str());
     cout << "Points in cloud " << cloud_filtered->size() << endl;
 
-
-    pcl::SACSegmentation<PointT> seg;
-    pcl::PointIndices::Ptr inliers (new pcl::PointIndices);
-    pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients);
-    pcl::PointCloud<PointT>::Ptr cloud_plane (new pcl::PointCloud<PointT> ());
-    seg.setOptimizeCoefficients (true);
-    seg.setModelType (pcl::SACMODEL_PLANE);
-    seg.setMethodType (pcl::SAC_RANSAC);
-    seg.setMaxIterations (100);
-    seg.setDistanceThreshold (0.02);
-
-    // Segment the largest planar component from the remaining cloud
-    seg.setInputCloud (cloud_filtered);
-    seg.segment (*inliers, *coefficients);
-    if (inliers->indices.size () == 0)
+    if (!removeGroundPlane(cloud_filtered))
     {
-        ROS_ERROR("%s: Failed to estimate the ground plane.", ros::this_node::getName().c_str());
-        //return ret;
-        return true;
+        return false;
     }
-
-    ROS_INFO("%s: cloud plane segmented", ros::this_node::getName().c_str());
-
-    // Extract the planar inliers from the input cloud
-    pcl::ExtractIndices<PointT> extract;
-    extract.setKeepOrganized(true);
-    extract.setInputCloud (cloud_filtered);
-    extract.setIndices (inliers);
-    extract.setNegative (false);
-
-    // Get the points associated with the planar surface
-    extract.filter (*cloud_plane);
-    std::cout << ros::this_node::getName() << ": PointCloud representing the planar component: " << cloud_plane->points.size () << " data points." << std::endl;
-
-    // Remove the planar inliers, extract the rest
-    extract.setNegative (true);
-    extract.filter (*cloud_f);
-    *cloud_filtered = *cloud_f;
 
     int nanCount = 0;
     std::vector<int> nan_indices;
@@ -137,10 +97,11 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
     std::vector<int> indices;
     cout << "cloud size before removing nans: " << cloud_filtered->size() << endl;
     pcl::removeNaNFromPointCloud(*cloud_filtered, *cloud_filtered, indices);
-    cout << "cloud size after removing nans: " << cloud_filtered->size() << endl;
+    //pcl::io::savePCDFile(std::string("/home/edith/.ros/nan_cloud.pcd"), *removed_nan_cloud);
+    cout << "cloud size after removing nans: " << cloud_filtered->points.size() << endl;
 
-    if (cloud_filtered->size() == 0) {
-        ROS_INFO("Empty cloud afte removing the plane");
+    if (cloud_filtered->empty()) {
+        ROS_INFO("Empty cloud after removing the plane");
         return true;
     }
 
@@ -156,21 +117,21 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
     ne.setRadiusSearch (0.01);
     ne.compute (*cloud_with_normals);
 
-//    pcl::PointCloud<pcl::Normal>::Ptr just_normals(new pcl::PointCloud<pcl::Normal>);
-//    pcl::copyPointCloud(*cloud_with_normals, *just_normals);
-//    boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer ("3D Viewer"));
-//    viewer->setBackgroundColor (0, 0, 0);
-//    pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> rgb(cloud_filtered);
-//    viewer->addPointCloud<pcl::PointXYZRGB> (cloud_filtered, rgb, "sample cloud");
-//    viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "sample cloud");
-//    viewer->addPointCloudNormals<pcl::PointXYZRGB, pcl::Normal> (cloud_filtered, just_normals, 10, 0.05, "normals");
-//    viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 1.0, 1.0, "normals");
-//    viewer->addCoordinateSystem (1.0);
-//    viewer->initCameraParameters ();
-//    while (!viewer->wasStopped ())
-//     {
-//        viewer->spinOnce (100);
-//    }
+    //    pcl::PointCloud<pcl::Normal>::Ptr just_normals(new pcl::PointCloud<pcl::Normal>);
+    //    pcl::copyPointCloud(*cloud_with_normals, *just_normals);
+    //    boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer ("3D Viewer"));
+    //    viewer->setBackgroundColor (0, 0, 0);
+    //    pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> rgb(cloud_filtered);
+    //    viewer->addPointCloud<pcl::PointXYZRGB> (cloud_filtered, rgb, "sample cloud");
+    //    viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "sample cloud");
+    //    viewer->addPointCloudNormals<pcl::PointXYZRGB, pcl::Normal> (cloud_filtered, just_normals, 10, 0.05, "normals");
+    //    viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_COLOR, 1.0, 1.0, 1.0, "normals");
+    //    viewer->addCoordinateSystem (1.0);
+    //    viewer->initCameraParameters ();
+    //    while (!viewer->wasStopped ())
+    //     {
+    //        viewer->spinOnce (100);
+    //    }
 
 
     // Set up a Conditional Euclidean Clustering class
@@ -186,19 +147,19 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
     cec.getRemovedClusters (small_clusters, large_clusters);
 
 
-//    // Creating the KdTree object for the search method of the extraction
-//    pcl::search::KdTree<PointT>::Ptr tree (new pcl::search::KdTree<PointT>);
-//    tree->setInputCloud (cloud_filtered);
-//    ROS_INFO("%s: kd-tree created", ros::this_node::getName().c_str());
+    //    // Creating the KdTree object for the search method of the extraction
+    //    pcl::search::KdTree<PointT>::Ptr tree (new pcl::search::KdTree<PointT>);
+    //    tree->setInputCloud (cloud_filtered);
+    //    ROS_INFO("%s: kd-tree created", ros::this_node::getName().c_str());
 
-//    std::vector<pcl::PointIndices> cluster_indices;
-//    pcl::EuclideanClusterExtraction<PointT> ec;
-//    ec.setClusterTolerance (0.02); // 2cm
-//    ec.setMinClusterSize (0);
-//    ec.setMaxClusterSize (125000);
-//    ec.setSearchMethod (tree);
-//    ec.setInputCloud (cloud_filtered);
-//    ec.extract (cluster_indices);
+    //    std::vector<pcl::PointIndices> cluster_indices;
+    //    pcl::EuclideanClusterExtraction<PointT> ec;
+    //    ec.setClusterTolerance (0.02); // 2cm
+    //    ec.setMinClusterSize (0);
+    //    ec.setMaxClusterSize (125000);
+    //    ec.setSearchMethod (tree);
+    //    ec.setInputCloud (cloud_filtered);
+    //    ec.extract (cluster_indices);
 
     ROS_INFO("Finished Euclidean clustering");
     ROS_INFO("Number of small clusteres: %zu; Number of large clusteres: %zu", small_clusters->size(), large_clusters->size());
@@ -267,8 +228,8 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
 
     }
 
-    pcl::io::savePNGFile(std::string("_segmented.png"), *segmented_cloud, "rgb");
-    pcl::io::savePCDFile(std::string("_segmented.pcd"), *segmented_cloud);
+    //pcl::io::savePNGFile(std::string("_segmented.png"), *segmented_cloud, "rgb");
+    //pcl::io::savePCDFile(std::string("_segmented.pcd"), *segmented_cloud);
 
     std::vector<pcl::PointCloud<PointT>::Ptr> clusters;
     for (std::vector<pcl::PointIndices>::const_iterator it = eucl_clusters->begin(); it != eucl_clusters->end(); ++it)
@@ -298,7 +259,7 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
         stringstream ss;
         ss << "cluster" << i << ".pcd";
 
-        pcl::io::savePCDFile(ss.str(), *clusters[i]);
+        //pcl::io::savePCDFile(ss.str(), *clusters[i]);
         pcl::computeMeanAndCovarianceMatrix(*clusters[i], covariance_matrix, centroid);
         if(isValidCluster(clusters[i], centroid, converted_clusters[i]))
         {
@@ -371,6 +332,64 @@ bool SegmentationPopoutNode::returnNextResult(squirrel_object_perception_msgs::S
         return true;
     }
     return false;
+}
+
+//removes the ground plane and keeps the cloud organized
+bool SegmentationPopoutNode::removeGroundPlane(pcl::PointCloud<PointT>::Ptr &cloud) {
+    pcl::PointCloud<PointT>::Ptr removed_nan_cloud(new pcl::PointCloud<PointT>);
+    std::vector<int> nan_indices;
+    pcl::removeNaNFromPointCloud(*cloud, *removed_nan_cloud, nan_indices);
+
+    pcl::SACSegmentation<PointT> seg;
+    pcl::PointIndices::Ptr inliers (new pcl::PointIndices);
+    pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients);
+    seg.setOptimizeCoefficients (true);
+    seg.setModelType (pcl::SACMODEL_PLANE);
+    seg.setMethodType (pcl::SAC_RANSAC);
+    seg.setMaxIterations (1000);
+    seg.setDistanceThreshold (0.02);
+
+    //create a vector containing 0 (no ground plane point) and 1 (ground plane point)
+    std::vector<int> indices(removed_nan_cloud->points.size());
+
+    // Segment the largest planar component from the remaining cloud
+    seg.setInputCloud (removed_nan_cloud);
+    seg.segment (*inliers, *coefficients);
+    if (inliers->indices.size () == 0)
+    {
+        ROS_ERROR("%s: Failed to estimate the ground plane.", ros::this_node::getName().c_str());
+        //return ret;
+        return false;
+    }
+
+    for (size_t i = 0; i < removed_nan_cloud->size(); i++) {
+        if (inliers->indices.size() != 0) {
+            if (inliers->indices.at(0) == i) {
+                indices.at(i) = 1;
+                inliers->indices.erase(inliers->indices.begin());
+            } else {
+                indices.at(i) = 0;
+            }
+        }
+    }
+
+    for (size_t i = 0; i < cloud->size(); i++) {
+        if (indices.size() != 0) {
+            if (pcl_isfinite(cloud->points[i].x) && pcl_isfinite(cloud->points[i].y) && pcl_isfinite(cloud->points[i].z)) {
+                if (indices.at(0) == 1) {
+                    cloud->points.at(i).x = std::numeric_limits<float>::quiet_NaN();
+                    cloud->points.at(i).y = std::numeric_limits<float>::quiet_NaN();
+                    cloud->points.at(i).z = std::numeric_limits<float>::quiet_NaN();
+                }
+                indices.erase(indices.begin());
+            }
+        }
+    }
+
+    cloud->is_dense = false;
+    ROS_INFO("%s: cloud plane segmented", ros::this_node::getName().c_str());
+
+    return true;
 }
 
 void SegmentationPopoutNode::visualizePersistentObject(PersistentObject &obj)
@@ -603,19 +622,19 @@ bool SegmentationPopoutNode::customRegionGrowing (const pcl::PointXYZRGBNormal& 
         }
     }
 
-//  if (squared_distance < 0.04)
-//  {
-//    //if (fabs (std::sqrt(std::pow(point_a.r - point_b.r,2) + std::pow(point_a.g - point_b.g,2) + std::pow(point_a.b - point_b.b,2)) < 10.0f))
-//    //  return (true);
-//    if (fabs (point_a_normal.dot (point_b_normal)) < 0.97)
-//      return (true);
-//  }
-//  else
-//  {
-//     // if (fabs (std::sqrt(std::pow(point_a.r - point_b.r,2) + std::pow(point_a.g - point_b.g,2) + std::pow(point_a.b - point_b.b,2)) < 15.0f))
-//     //   return (true);
-//  }
-//  return (false);
+    //  if (squared_distance < 0.04)
+    //  {
+    //    //if (fabs (std::sqrt(std::pow(point_a.r - point_b.r,2) + std::pow(point_a.g - point_b.g,2) + std::pow(point_a.b - point_b.b,2)) < 10.0f))
+    //    //  return (true);
+    //    if (fabs (point_a_normal.dot (point_b_normal)) < 0.97)
+    //      return (true);
+    //  }
+    //  else
+    //  {
+    //     // if (fabs (std::sqrt(std::pow(point_a.r - point_b.r,2) + std::pow(point_a.g - point_b.g,2) + std::pow(point_a.b - point_b.b,2)) < 15.0f))
+    //     //   return (true);
+    //  }
+    //  return (false);
     return false;
 }
 

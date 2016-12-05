@@ -109,6 +109,7 @@ private:
   void transformBase2Kinect(pcl::PointCloud<PointT>::Ptr &cloud_cluster);
   bool isValidCluster(pcl::PointCloud<PointT>::Ptr &cloud_cluster, Eigen::Vector4f &centroid, std::vector<int> &cluster_indices);
   void visualizePersistentObject(PersistentObject &obj);
+  bool removeGroundPlane(pcl::PointCloud<PointT>::Ptr &cloud);
 
   static bool customRegionGrowing (const pcl::PointXYZRGBNormal &point_a, const pcl::PointXYZRGBNormal &point_b, float squared_distance);
 

@@ -32,6 +32,7 @@
 #include "OctomapLib.h"
 #include "squirrel_object_perception_msgs/SceneObject.h"
 #include "squirrel_object_perception_msgs/FindDynamicObjects.h"
+#include "squirrel_object_perception_msgs/CheckWaypoint.h"
 #include <boost/foreach.hpp>
 #include "mongodb_store/message_store.h"
 #include <iostream>
@@ -44,6 +45,7 @@ class RemoveBackground {
 private:
 
     ros::ServiceServer Remover_;
+    ros::ServiceServer checkWaypointServer;
     ros::NodeHandle *n_;
     ros::Publisher markerPublisher;
 
@@ -55,6 +57,8 @@ private:
     std::string staticOctomapPath_;
 
     bool removeBackground (squirrel_object_perception_msgs::FindDynamicObjects::Request &req, squirrel_object_perception_msgs::FindDynamicObjects::Response & response);
+    bool checkWaypoint (squirrel_object_perception_msgs::CheckWaypoint::Request & request, squirrel_object_perception_msgs::CheckWaypoint::Response & response);
+
 
     mongodb_store::MessageStoreProxy message_store;
 

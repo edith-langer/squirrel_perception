@@ -255,6 +255,7 @@ void RemoveBackground::initialize(int argc, char **argv) {
 
     n_->getParam("static_octomap_path", staticOctomapPath_);
     markerPublisher = n_->advertise<visualization_msgs::Marker>("vis_marker_dynamic_objects", 0);
+    marker_pub = this->n_->advertise<visualization_msgs::Marker>("bb_triangle", 1);
 
     setStaticOctomap(staticOctomapPath_);
 
@@ -301,7 +302,7 @@ void RemoveBackground::initialize(int argc, char **argv) {
     statistics_file << "Time for subtraction; Time for comparing cloud against 2D grid; Time to cluster and filter; overall time; number of nodes in current octomap; Number of clusters\n";
     statistics_file.flush();
     Remover_ = n_->advertiseService ("/squirrel_find_dynamic_objects", &RemoveBackground::removeBackground, this);
-    checkWaypointServer = n_->advertiseService ("/squirrel_check_waypoint", &RemoveBackground::checkWaypoint, this);
+    checkWaypointServer = n_->advertiseService ("/squirrel_check_viewcone", &RemoveBackground::checkWaypoint, this);
 
 
     ROS_INFO ("TUW: /squirrel_find_dynamic_objects ready to get service calls...");
@@ -524,6 +525,7 @@ std::string RemoveBackground::get_unique_object_id() {
 bool RemoveBackground::checkWaypoint (squirrel_object_perception_msgs::CheckWaypoint::Request & request, squirrel_object_perception_msgs::CheckWaypoint::Response & response) {
     {pcl::ScopeTime overallTime("Check waypoint call");
 
+        bool is_covered = true;
         //read the input
         octomap_msgs::OctomapConstPtr current_octomap_msg = ros::topic::waitForMessage<octomap_msgs::Octomap>("/octomap_binary", *n_, ros::Duration(10));
         setCurrentOctomap(dynamic_cast<octomap::OcTree*>(octomap_msgs::msgToMap(*current_octomap_msg)));
@@ -538,10 +540,6 @@ bool RemoveBackground::checkWaypoint (squirrel_object_perception_msgs::CheckWayp
         q.setW(q_msg.w);
 
         double yaw = tf::getYaw(q);
-        //        double t3 = +2.0 * (q.w() * q.z() + q.x() * q.y());
-        //        double t4 = +1.0 - 2.0 * (ysqr + q.z() * q.z());
-        //        double ysqr = q.y() * q.y();
-        //        double yaw = std::atan2(t3, t4);
 
         // Calculate the triangle points encompasses the area that is viewed.
         tf::Vector3 view_point(pose.position.x, pose.position.y, pose.position.z);
@@ -566,40 +564,97 @@ bool RemoveBackground::checkWaypoint (squirrel_object_perception_msgs::CheckWayp
         v2 *= length;
         v2 += view_point;
 
+        ROS_INFO("Triangle with following points (%f,%f), (%f,%f), (%f,%f)", pose.position.x, pose.position.y,
+                 v1.x(), v1.y(), v2.x(), v2.y());
+
         octomap::point3d min, max;
-        min.x() = std::min((float)v1.x(), (float)pose.position.x);
-        min.y() = std::min(v1.y(), v2.y());
-        min.z() = 0;
-        max.x() = std::min(v1.x(), pose.position.x);
-        min.y() = std::min(v1.y(), v2.y());
-        min.z() = octomap_lib.leaf_size;
+        min.x() = std::min(std::min(v1.x(), pose.position.x), v2.x());
+        min.y() = std::min(std::min(v1.y(), v2.y()), pose.position.y);
+        min.z() = -octomap_lib.leaf_size + 0.00001;
+        max.x() = std::max(std::max(v1.x(), pose.position.x), v2.x());
+        max.y() = std::max(std::max(v1.y(), v2.y()), pose.position.y);
+        max.z() = 0-0.00001;
 
-        for(octomap::OcTree::leaf_bbx_iterator it = currentMap->begin_leafs_bbx(min, max);
-            it != currentMap->end_leafs_bbx(); it ++) {
-            octomap::point3d node_coordinates= it.getCoordinate();
-            int nvert = 3; //number of vertices
-            std::vector<float> triangle_x, triangle_y;
-            triangle_x.push_back(v1.x());
-            triangle_x.push_back(v2.x());
-            triangle_x.push_back(pose.position.x);
-            triangle_x.push_back(v1.x());
-            triangle_y.push_back(v1.y());
-            triangle_y.push_back(v2.y());
-            triangle_x.push_back(pose.position.y);
-            triangle_y.push_back(v1.y());
 
-            int i, j, is_in_viewcone = 0;
-            for (i = 0, j = nvert-1; i < nvert; j = i++) {
-                if ( ((triangle_y[i]>= node_coordinates.y()) != (triangle_y[j]>node_coordinates.y())) &&
-                     (node_coordinates.x() < (triangle_x[j]-triangle_x[i]) * (node_coordinates.y()-triangle_y[i]) / (triangle_y[j]-triangle_y[i]) + triangle_x[i]) )
-                    is_in_viewcone = !is_in_viewcone;
-            }
-            if (is_in_viewcone) {
-                if(!currentMap->isNodeOccupied(*it)) {
-                    return false;
+        visualization_msgs::Marker marker;
+        marker.header.frame_id = "/map";
+        marker.header.stamp = ros::Time::now();
+        marker.ns = "bb";
+        marker.id = 0;
+        marker.type = visualization_msgs::Marker::CUBE;
+        marker.action = visualization_msgs::Marker::ADD;
+        marker.pose.position.x = min.x() + (max.x()-min.x())/2;
+        marker.pose.position.y = min.y() + (max.y()-min.y())/2;;
+        marker.pose.position.z = 0;
+        marker.pose.orientation.x = 0.0;
+        marker.pose.orientation.y = 0.0;
+        marker.pose.orientation.z = 0.0;
+        marker.pose.orientation.w = 1.0;
+        marker.scale.x = max.x()-min.x();
+        marker.scale.y = max.y()-min.y();
+        marker.scale.z = 0.5;
+        marker.color.r = 1.0f;
+        marker.color.g = 0.0f;
+        marker.color.b = 0.0f;
+        marker.color.a = 0.5f;
+        marker_pub.publish(marker);
+
+        int countMissingNodes = 0;
+        int countTriangleNodes = 0;
+        currentMap->expand();
+        for (double ix =min.x(); ix < max.x(); ix += octomap_lib.leaf_size) {
+            for (double iy =min.y(); iy < max.y(); iy += octomap_lib.leaf_size) {
+                octomap::point3d node_coordinates(ix, iy, max.z());
+                int nvert = 3; //number of vertices
+                std::vector<float> triangle_x, triangle_y;
+                triangle_x.push_back(v1.x());
+                triangle_x.push_back(v2.x());
+                triangle_x.push_back(pose.position.x);
+                triangle_x.push_back(v1.x());
+                triangle_y.push_back(v1.y());
+                triangle_y.push_back(v2.y());
+                triangle_x.push_back(pose.position.y);
+                triangle_y.push_back(v1.y());
+
+                int i, j, is_in_viewcone = 0;
+                for (i = 0, j = nvert-1; i < nvert; j = i++) {
+                    if ( ((triangle_y[i]>= node_coordinates.y()) != (triangle_y[j]>node_coordinates.y())) &&
+                         (node_coordinates.x() < (triangle_x[j]-triangle_x[i]) * (node_coordinates.y()-triangle_y[i]) / (triangle_y[j]-triangle_y[i]) + triangle_x[i]) )
+                        is_in_viewcone = !is_in_viewcone;
+                }
+                if (is_in_viewcone) {
+                    octomap::OcTreeNode* node = currentMap->search(ix, iy, max.z());
+                    if (node == NULL) {
+                        countMissingNodes+=1;
+                        //ROS_INFO ("Unknown node in bounding box");
+                    }
+                   /* else if(!currentMap->isNodeOccupied(node)) { //this case should not occure
+                        std::cout << "Node is not occupied" << std::endl;
+                        //                    std::cout << "Waypoint should be used. It is not fully covered by the octomap! Position: ("
+                        //                              << node_coordinates.x() << "," << node_coordinates.y() << "," << node_coordinates.z() << ")" << std::endl;
+                        countMissingNodes+=1;
+                    }*/ else {
+                        //                    std::cout << "Node is occupied and in view cone: ("
+                        //                              << node_coordinates.x() << "," << node_coordinates.y() << "," << node_coordinates.z() << ")" << std::endl;
+                        countTriangleNodes+=1;
+                    }
                 }
             }
         }
 
+        if (countMissingNodes == 0) {
+            response.explore_waypoint.data = false;
+            ROS_INFO("View cone is fully covered!");
+            return true;
+        }
+        if (countMissingNodes/(countTriangleNodes+countMissingNodes) > 0.1) {   //more than 10 percent of the nodes are missing
+            ROS_INFO("More than 10 percent of the view cone are not covered");
+            response.explore_waypoint.data = true;
+            return true;
+        }
+
+        ROS_INFO("Almost everything of the view cone is covered");
+        response.explore_waypoint.data = false;
+        return true;
     }
 }

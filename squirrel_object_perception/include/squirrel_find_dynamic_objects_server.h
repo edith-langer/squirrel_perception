@@ -48,6 +48,7 @@ private:
     ros::ServiceServer checkWaypointServer;
     ros::NodeHandle *n_;
     ros::Publisher markerPublisher;
+    ros::Publisher marker_pub;
 
     octomap::OcTree *staticMap;
     octomap::OcTree *currentMap;

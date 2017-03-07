@@ -14,6 +14,7 @@
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/segmentation/extract_clusters.h>
 #include <pcl_conversions/pcl_conversions.h>
+#include <pcl/common/time.h>
 #include <visualization_msgs/Marker.h>
 #include <squirrel_segmentation/squirrel_segmentation_popout.hpp>
 
@@ -49,6 +50,7 @@ void SegmentationPopoutNode::initialize(int argc, char ** argv)
 
 bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentInit::Request & req, squirrel_object_perception_msgs::SegmentInit::Response & response)
 {
+    {pcl::ScopeTime time("Segmentation needs ");
     bool ret = false;
 
     ROS_INFO("%s: new point cloud", ros::this_node::getName().c_str());
@@ -84,21 +86,6 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
     {
         return false;
     }
-
-    int nanCount = 0;
-    std::vector<int> nan_indices;
-    for (size_t i = 0; i < cloud_filtered->size(); i++) {
-        if (!pcl_isfinite(cloud_filtered->points[i].x) || !pcl_isfinite(cloud_filtered->points[i].y) || !pcl_isfinite(cloud_filtered->points[i].z)) {
-            nanCount += 1;
-            nan_indices.push_back(i);
-        }
-    }
-    cout << "NANS: " << nanCount << endl;
-    std::vector<int> indices;
-    cout << "cloud size before removing nans: " << cloud_filtered->size() << endl;
-    pcl::removeNaNFromPointCloud(*cloud_filtered, *cloud_filtered, indices);
-    //pcl::io::savePCDFile(std::string("/home/edith/.ros/nan_cloud.pcd"), *removed_nan_cloud);
-    cout << "cloud size after removing nans: " << cloud_filtered->points.size() << endl;
 
     if (cloud_filtered->empty()) {
         ROS_INFO("Empty cloud after removing the plane");
@@ -140,7 +127,7 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
     pcl::ConditionalEuclideanClustering<pcl::PointXYZRGBNormal> cec (true);
     cec.setInputCloud (cloud_with_normals);
     cec.setConditionFunction (&customRegionGrowing);
-    cec.setClusterTolerance (0.02);
+    cec.setClusterTolerance (0.02);     //0.01
     cec.setMinClusterSize (30);
     cec.setMaxClusterSize (25000);
     cec.segment (*eucl_clusters);
@@ -163,73 +150,6 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
 
     ROS_INFO("Finished Euclidean clustering");
     ROS_INFO("Number of small clusteres: %zu; Number of large clusteres: %zu", small_clusters->size(), large_clusters->size());
-
-    //--------------For visualization------------------------------
-    pcl::PointCloud<PointT>::Ptr segmented_cloud(new pcl::PointCloud<PointT>);
-    *segmented_cloud = *cloud_;
-
-    std::vector<int> r;
-    std::vector<int> g;
-    std::vector<int> b;
-
-    std::vector<pair_type> all_cluster_indices;
-    std::vector<std::vector<int> > converted_clusters(eucl_clusters->size());
-    for (size_t i = 0; i < eucl_clusters->size(); i++)
-    {
-        r.push_back(std::rand()%255);
-        g.push_back(std::rand()%255);
-        b.push_back(std::rand()%255);
-
-        for (std::vector<int>::const_iterator pit = (*eucl_clusters)[i].indices.begin (); pit != (*eucl_clusters)[i].indices.end (); ++pit) {
-            all_cluster_indices.push_back(pair_type(*pit, i));
-        }
-    }
-
-    for (size_t i = 0; i < small_clusters->size(); i++) {
-        for (std::vector<int>::const_iterator pit = (*small_clusters)[i].indices.begin (); pit != (*small_clusters)[i].indices.end (); ++pit) {
-            all_cluster_indices.push_back(pair_type(*pit, -1));
-        }
-    }
-
-    for (size_t i = 0; i < large_clusters->size(); i++) {
-        for (std::vector<int>::const_iterator pit = (*large_clusters)[i].indices.begin (); pit != (*large_clusters)[i].indices.end (); ++pit) {
-            all_cluster_indices.push_back(pair_type(*pit, -1));
-        }
-    }
-
-
-    cout << "All cluster indices: " << all_cluster_indices.size() << endl;
-    cout << "All nan indices: " << nan_indices.size() << endl;
-    cout << "Cloud size: " << cloud_->size() << endl;
-
-
-    std::sort(nan_indices.begin(), nan_indices.end());
-    std::sort(all_cluster_indices.begin(), all_cluster_indices.end(), pair_comparator);
-
-
-    //cout << "start coloring clusters" << endl;
-    for (size_t i = 0; i < cloud_->size(); i++) {
-        if (nan_indices.size() != 0) {
-            if (nan_indices.at(0) == i) {
-                nan_indices.erase(nan_indices.begin());
-                continue;
-            }
-        }
-        //cout << "cloud index: " << i << "; cluster index: " << all_cluster_indices.begin()->first << endl;
-        int cluster = all_cluster_indices.begin()->second;
-        if (cluster != -1) {
-            segmented_cloud->at(i).r = r.at(cluster);
-            segmented_cloud->at(i).g = g.at(cluster);
-            segmented_cloud->at(i).b = b.at(cluster);
-
-            converted_clusters.at(cluster).push_back(i);
-        }
-        all_cluster_indices.erase(all_cluster_indices.begin());
-
-    }
-
-    //pcl::io::savePNGFile(std::string("_segmented.png"), *segmented_cloud, "rgb");
-    //pcl::io::savePCDFile(std::string("_segmented.pcd"), *segmented_cloud);
 
     std::vector<pcl::PointCloud<PointT>::Ptr> clusters;
     for (std::vector<pcl::PointIndices>::const_iterator it = eucl_clusters->begin(); it != eucl_clusters->end(); ++it)
@@ -261,7 +181,7 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
 
         //pcl::io::savePCDFile(ss.str(), *clusters[i]);
         pcl::computeMeanAndCovarianceMatrix(*clusters[i], covariance_matrix, centroid);
-        if(isValidCluster(clusters[i], centroid, converted_clusters[i]))
+        if(isValidCluster(clusters[i], centroid))
         {
             //      geometry_msgs::PoseStamped inMap = base_link2map(centroid[0], centroid[1], centroid[2]);
             //      PersistentObject newObject(clusters[i], inMap.pose.position.x, inMap.pose.position.y, inMap.pose.position.z);
@@ -280,8 +200,8 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
             results.push_back(SegmentationResult());
             transformBase2Kinect(clusters[i]);
             geometry_msgs::PoseStamped poseKinect = base_link2kinect(centroid[0], centroid[1], centroid[2]);
-            for(size_t k = 0; k < converted_clusters[i].size(); k++) {
-                results.back().indices.data.push_back(converted_clusters[i][k]);
+            for(size_t k = 0; k < (*eucl_clusters)[i].indices.size(); k++) {
+                results.back().indices.data.push_back((*eucl_clusters)[i].indices[k]);
             }
             results.back().distanceFromRobot = centroid[0];
             results.back().pose = poseKinect;
@@ -302,6 +222,7 @@ bool SegmentationPopoutNode::segment(squirrel_object_perception_msgs::SegmentIni
     ret = true;
 
     return ret;
+    }
 }
 
 bool SegmentationPopoutNode::returnNextResult(squirrel_object_perception_msgs::SegmentOnce::Request & req, squirrel_object_perception_msgs::SegmentOnce::Response & response)
@@ -336,9 +257,9 @@ bool SegmentationPopoutNode::returnNextResult(squirrel_object_perception_msgs::S
 
 //removes the ground plane and keeps the cloud organized
 bool SegmentationPopoutNode::removeGroundPlane(pcl::PointCloud<PointT>::Ptr &cloud) {
-    pcl::PointCloud<PointT>::Ptr removed_nan_cloud(new pcl::PointCloud<PointT>);
+
     std::vector<int> nan_indices;
-    pcl::removeNaNFromPointCloud(*cloud, *removed_nan_cloud, nan_indices);
+    pcl::removeNaNFromPointCloud(*cloud, *cloud, nan_indices);
 
     pcl::SACSegmentation<PointT> seg;
     pcl::PointIndices::Ptr inliers (new pcl::PointIndices);
@@ -349,41 +270,14 @@ bool SegmentationPopoutNode::removeGroundPlane(pcl::PointCloud<PointT>::Ptr &clo
     seg.setMaxIterations (1000);
     seg.setDistanceThreshold (0.02);
 
-    //create a vector containing 0 (no ground plane point) and 1 (ground plane point)
-    std::vector<int> indices(removed_nan_cloud->points.size());
-
-    // Segment the largest planar component from the remaining cloud
-    seg.setInputCloud (removed_nan_cloud);
+     // Segment the largest planar component from the remaining cloud
+    seg.setInputCloud (cloud);
     seg.segment (*inliers, *coefficients);
     if (inliers->indices.size () == 0)
     {
         ROS_ERROR("%s: Failed to estimate the ground plane.", ros::this_node::getName().c_str());
         //return ret;
         return false;
-    }
-
-    for (size_t i = 0; i < removed_nan_cloud->size(); i++) {
-        if (inliers->indices.size() != 0) {
-            if (inliers->indices.at(0) == i) {
-                indices.at(i) = 1;
-                inliers->indices.erase(inliers->indices.begin());
-            } else {
-                indices.at(i) = 0;
-            }
-        }
-    }
-
-    for (size_t i = 0; i < cloud->size(); i++) {
-        if (indices.size() != 0) {
-            if (pcl_isfinite(cloud->points[i].x) && pcl_isfinite(cloud->points[i].y) && pcl_isfinite(cloud->points[i].z)) {
-                if (indices.at(0) == 1) {
-                    cloud->points.at(i).x = std::numeric_limits<float>::quiet_NaN();
-                    cloud->points.at(i).y = std::numeric_limits<float>::quiet_NaN();
-                    cloud->points.at(i).z = std::numeric_limits<float>::quiet_NaN();
-                }
-                indices.erase(indices.begin());
-            }
-        }
     }
 
     cloud->is_dense = false;
@@ -560,7 +454,7 @@ void SegmentationPopoutNode::transformBase2Kinect(pcl::PointCloud<PointT>::Ptr &
 /**
  * Perform sanity checks to rule out stupid clusters like walls, people ..
  */
-bool SegmentationPopoutNode::isValidCluster(pcl::PointCloud<PointT>::Ptr &cloud_cluster, Eigen::Vector4f &centroid, std::vector<int> &cluster_indices)
+bool SegmentationPopoutNode::isValidCluster(pcl::PointCloud<PointT>::Ptr &cloud_cluster, Eigen::Vector4f &centroid)
 {
     // reject objects too far away (e.g. the wall when looking straight)
     // NOTE: cluster is in base_link frame, with x pointing forward, z up
@@ -601,25 +495,27 @@ bool SegmentationPopoutNode::customRegionGrowing (const pcl::PointXYZRGBNormal& 
 {
     Eigen::Map<const Eigen::Vector3f> point_a_normal = point_a.normal, point_b_normal = point_b.normal;
 
+    //cout << "Squared distance: " << squared_distance << endl;
     if (squared_distance < 0.0003) {
-        if (fabs (point_a_normal.dot (point_b_normal)) > 0.99) {
-            //ROS_INFO("Normal small");
-            return (true);
-
-        }
-        if (fabs (std::sqrt(std::pow(point_a.r - point_b.r,2) + std::pow(point_a.g - point_b.g,2) + std::pow(point_a.b - point_b.b,2)) < 8.0f)) {
+        if (fabs (std::sqrt(std::pow(point_a.r - point_b.r,2) + std::pow(point_a.g - point_b.g,2) + std::pow(point_a.b - point_b.b,2)) < 8.0f)) {  //14.0
             //ROS_INFO("Color small");
             return (true);
         }
+        if (fabs (point_a_normal.dot (point_b_normal)) > 0.99) {     //0.99997
+            //ROS_INFO("Normal small");
+            return (true);
+        }
+
     } else {
-        if (fabs (point_a_normal.dot (point_b_normal)) > 0.97) {
+        if (fabs (std::sqrt(std::pow(point_a.r - point_b.r,2) + std::pow(point_a.g - point_b.g,2) + std::pow(point_a.b - point_b.b,2)) < 12.0f)) {  //18.0
+            //ROS_INFO("Color large %f", fabs (std::sqrt(std::pow(point_a.r - point_b.r,2) + std::pow(point_a.g - point_b.g,2) + std::pow(point_a.b - point_b.b,2))));
+            return (true);
+        }
+        if (fabs (point_a_normal.dot (point_b_normal)) > 0.97) {        //0.98
             //ROS_INFO("Normal large");
             return (true);
         }
-        if (fabs (std::sqrt(std::pow(point_a.r - point_b.r,2) + std::pow(point_a.g - point_b.g,2) + std::pow(point_a.b - point_b.b,2)) < 12.0f)) {
-            //ROS_INFO("Color large");
-            return (true);
-        }
+
     }
 
     //  if (squared_distance < 0.04)

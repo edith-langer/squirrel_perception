@@ -212,6 +212,19 @@ void OctomapLib::octomapToPointcloud(OcTree *octomap, pcl::PointCloud<PointT>::P
 
 //}
 
+void OctomapLib::fillFloor(OcTree *octomap, octomap::point3d min, octomap::point3d max) {
+    for (double ix =min.x(); ix < max.x(); ix += this->leaf_size) {
+        for (double iy =min.y(); iy < max.y(); iy += this->leaf_size) {
+            //ROS_INFO("x: %f, y: %f", ix, iy);
+            octomap::OcTreeNode* node = octomap->search(ix, iy, 0);
+            if (node==NULL) {
+                octomap->setNodeValue(ix,iy,0,logodds(octomap->getClampingThresMax()));
+            } else if (!octomap->isNodeOccupied(node)) {
+                node->setLogOdds(logodds(octomap->getClampingThresMax()));
+            }
+        }
+    }
+}
 
 void OctomapLib::getOctomapDimension(OcTree *octomap, unsigned int &width, unsigned int &height, unsigned int &depth) {
     double minX, minY, minZ, maxX, maxY, maxZ;
@@ -259,6 +272,7 @@ void OctomapLib::printMapInfo(OcTree *ocTree) {
 }
 
 void OctomapLib::writeOctomap(OcTree *ocTree, std::string path, bool binary) {
+    ocTree->expand();
     if (binary) {
         ocTree->writeBinary(path);
     } else {

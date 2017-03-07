@@ -39,6 +39,7 @@ public:
     void octomapExpandOccupiedNodes(octomap::OcTree *octomap);
     int getNumberOccupiedLeafNodes(const octomap::OcTree *octomap);
     octomap::OcTree dilateOctomap(octomap::OcTree *octomap);
+    void fillFloor(octomap::OcTree *octomap, octomap::point3d min, octomap::point3d max);
 
     void addNodes(octomap::OcTree *ocTree);
 

@@ -196,7 +196,7 @@ protected:
     void transformPointCloud(pcl::PointCloud<PointT>::Ptr &cloud_cluster, const std::string &from, const std::string &to) {
         try
         {
-            tf_listener.waitForTransform(from, to, ros::Time::now(), ros::Duration(1.0));
+            tf_listener.waitForTransform(from, to, ros::Time::now(), ros::Duration(3.0));
             pcl_ros::transformPointCloud(to, *cloud_cluster, *cloud_cluster, tf_listener);
         }
         catch (tf::TransformException& ex)
@@ -209,7 +209,7 @@ protected:
     void transformPointCloud(sensor_msgs::PointCloud2 &cloud_cluster, const std::string &from, const std::string &to) {
         try
         {
-            tf_listener.waitForTransform(from, to, ros::Time::now(), ros::Duration(1.0));
+            tf_listener.waitForTransform(from, to, ros::Time::now(), ros::Duration(3.0));
             pcl_ros::transformPointCloud(to, cloud_cluster, cloud_cluster, tf_listener);
         }
         catch (tf::TransformException& ex)
@@ -376,7 +376,7 @@ protected:
         squirrel_object_perception_msgs::SegmentOnce srv;
 
         int cnt = 0;
-        pcl::io::savePCDFile("original_scene.pcd", *original_scene);
+        pcl::io::savePCDFileBinary("original_scene.pcd", *original_scene);
         //right now only one object is returned
         while(client.call(srv)) {
             ROS_INFO("Called service %s ", "/squirrel_segmentation_incremental_once");
@@ -552,7 +552,7 @@ public:
         sensor_msgs::PointCloud2ConstPtr sceneConst;
         ROS_INFO("%s: executeCB started", action_name_.c_str());
 
-        setup_camera_position();
+        //setup_camera_position();
         sleep(2); // HACK: Michael Zillich
 
         for (std::vector<int>::iterator it = vis_marker_ids.begin() ; it != vis_marker_ids.end(); ++it) {
@@ -586,6 +586,40 @@ public:
                 ROS_INFO("Checking out a lump");
 
                 squirrel_object_perception_msgs::SceneObject sceneObject;
+
+                //pig
+//                sceneObject.pose.position.x = 2.45;
+//                sceneObject.pose.position.y = -1.9;
+//                sceneObject.pose.position.z = 0.15;
+//                sceneObject.pose.orientation.x = 0.0;
+//                sceneObject.pose.orientation.y = 0.0;
+//                sceneObject.pose.orientation.z = 0.0;
+//                sceneObject.pose.orientation.w = 1.0;
+//                sceneObject.bounding_cylinder.diameter = 0.72;
+//                sceneObject.bounding_cylinder.height = 0.2;
+
+                //dino
+//                sceneObject.pose.position.x = 1.4;
+//                sceneObject.pose.position.y = -1.1;
+//                sceneObject.pose.position.z = 0.125;
+//                sceneObject.pose.orientation.x = 0.0;
+//                sceneObject.pose.orientation.y = 0.0;
+//                sceneObject.pose.orientation.z = 0.0;
+//                sceneObject.pose.orientation.w = 1.0;
+//                sceneObject.bounding_cylinder.diameter = 0.64;
+//                sceneObject.bounding_cylinder.height = 0.15;
+
+                //rabbit
+//                sceneObject.pose.position.x = 4.75;
+//                sceneObject.pose.position.y = 0.575;
+//                sceneObject.pose.position.z = 0.125;
+//                sceneObject.pose.orientation.x = 0.0;
+//                sceneObject.pose.orientation.y = 0.0;
+//                sceneObject.pose.orientation.z = 0.0;
+//                sceneObject.pose.orientation.w = 1.0;
+//                sceneObject.bounding_cylinder.diameter = 0.602;
+//                sceneObject.bounding_cylinder.height = 0.15;
+
 
                 std::vector< boost::shared_ptr<squirrel_object_perception_msgs::SceneObject> > results;
                 if(message_store.queryNamed<squirrel_object_perception_msgs::SceneObject>(goal->id, results)) {
@@ -647,8 +681,10 @@ public:
 
                         //pass.filter(cutted_cloud_indices);
 
+                        transformPointCloud(cloud, cloud->header.frame_id, "/kinect_depth_optical_frame");
+                        pcl::io::savePCDFileBinary("cutted_scene_filename.pcd", *cloud);
 
-                        pcl::io::savePCDFile("cutted_scene_filename.pcd", *cloud);
+                        transformPointCloud(cloud, cloud->header.frame_id, "/map");
 
                         pcl::toROSMsg(*cloud, scene);
                     }
@@ -703,7 +739,7 @@ public:
         }
 
         pcl::io::savePNGFile(filename + std::string("_original.png"), *original_scene, "rgb");
-        pcl::io::savePCDFile(filename + std::string("_original.pcd"), *original_scene);
+        pcl::io::savePCDFileBinary(filename + std::string("_original.pcd"), *original_scene);
 
         std::cout << "Number of segmented objects: " << objects.size() << std::endl;
         for(objectIterator = objects.begin(); objectIterator != objects.end(); objectIterator++)
@@ -733,7 +769,7 @@ public:
 //                break;
         }
         pcl::io::savePNGFile(filename + std::string("_segmented.png"), *original_scene, "rgb");
-        pcl::io::savePCDFile(filename + std::string("_segmented.pcd"), *original_scene);
+        pcl::io::savePCDFileBinary(filename + std::string("_segmented.pcd"), *original_scene);
 
         success = true;
 

@@ -228,9 +228,9 @@ bool RemoveBackground::removeBackground (squirrel_object_perception_msgs::FindDy
                 zyl_marker.scale.y = diam;
                 zyl_marker.scale.z = z_diam;
                 zyl_marker.color.r = 1.0;
-                zyl_marker.color.g = 0.9;
-                zyl_marker.color.b = 0.1;
-                zyl_marker.color.a = 0.4;
+                zyl_marker.color.g = 1.0;
+                zyl_marker.color.b = 1.0;
+                zyl_marker.color.a = 0.6;
 
                 markerPublisher.publish(zyl_marker);
 
@@ -525,7 +525,6 @@ std::string RemoveBackground::get_unique_object_id() {
 bool RemoveBackground::checkWaypoint (squirrel_object_perception_msgs::CheckWaypoint::Request & request, squirrel_object_perception_msgs::CheckWaypoint::Response & response) {
     {pcl::ScopeTime overallTime("Check waypoint call");
 
-        bool is_covered = true;
         //read the input
         octomap_msgs::OctomapConstPtr current_octomap_msg = ros::topic::waitForMessage<octomap_msgs::Octomap>("/octomap_binary", *n_, ros::Duration(10));
         setCurrentOctomap(dynamic_cast<octomap::OcTree*>(octomap_msgs::msgToMap(*current_octomap_msg)));
@@ -601,9 +600,11 @@ bool RemoveBackground::checkWaypoint (squirrel_object_perception_msgs::CheckWayp
 
         int countMissingNodes = 0;
         int countTriangleNodes = 0;
+        int countBB =0;
         currentMap->expand();
         for (double ix =min.x(); ix < max.x(); ix += octomap_lib.leaf_size) {
             for (double iy =min.y(); iy < max.y(); iy += octomap_lib.leaf_size) {
+                countBB += 1;
                 octomap::point3d node_coordinates(ix, iy, max.z());
                 int nvert = 3; //number of vertices
                 std::vector<float> triangle_x, triangle_y;
@@ -613,7 +614,7 @@ bool RemoveBackground::checkWaypoint (squirrel_object_perception_msgs::CheckWayp
                 triangle_x.push_back(v1.x());
                 triangle_y.push_back(v1.y());
                 triangle_y.push_back(v2.y());
-                triangle_x.push_back(pose.position.y);
+                triangle_y.push_back(pose.position.y);
                 triangle_y.push_back(v1.y());
 
                 int i, j, is_in_viewcone = 0;
@@ -641,13 +642,17 @@ bool RemoveBackground::checkWaypoint (squirrel_object_perception_msgs::CheckWayp
                 }
             }
         }
+        ROS_INFO("Number of elements in BB: %d", countBB);
 
+        ROS_INFO("Number of missing nodes %d, number of filled nodes %d", countMissingNodes, countTriangleNodes);
         if (countMissingNodes == 0) {
             response.explore_waypoint.data = false;
             ROS_INFO("View cone is fully covered!");
             return true;
         }
-        if (countMissingNodes/(countTriangleNodes+countMissingNodes) > 0.1) {   //more than 10 percent of the nodes are missing
+        float f = countMissingNodes/(float)(countTriangleNodes+countMissingNodes);
+        ROS_INFO("Overlapping measurement: %f", 1-f);
+        if (countMissingNodes/(float)(countTriangleNodes+countMissingNodes) > 0.1) {   //more than 10 percent of the nodes are missing
             ROS_INFO("More than 10 percent of the view cone are not covered");
             response.explore_waypoint.data = true;
             return true;

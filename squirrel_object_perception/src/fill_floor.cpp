@@ -27,7 +27,7 @@ void RemoveBackground::initialize(int argc, char **argv) {
     octomap_lib.fillFloor(staticMap, min, max);
     std::cout << "Successfully filled floor" << std::endl;
     std::cout << "Filled map has " << octomap_lib.getNumberOccupiedLeafNodes(staticMap) << "nodes" << std::endl;
-    octomap_lib.writeOctomap(staticMap , filled_octomap_path, ends_with(filled_octomap_path, "bt"));
+    octomap_lib.writeOctomap(*staticMap , filled_octomap_path, ends_with(filled_octomap_path, "bt"));
 
 }
 

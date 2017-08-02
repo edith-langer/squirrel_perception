@@ -158,6 +158,70 @@ OcTree OctomapLib::subtractOctomap(const OcTree *minuendMap, OcTree subtrahendMa
     return subtrahendMap;
 }
 
+OcTree OctomapLib::compareOctomapToStatic(const OcTree *staticMap, OcTree currentOctomap) {
+    for (OcTree::leaf_iterator it = currentOctomap.begin_leafs(), end=currentOctomap.end_leafs(); it!=end; ++it) {
+        if(currentOctomap.isNodeOccupied(*it)) {
+            KeySet::iterator key_it = static_keys.find(it.getKey());
+            if (key_it != static_keys.end()) { //voxel is occupied in static map as well
+                it->setLogOdds(logodds(currentOctomap.getClampingThresMin()));
+            } else { //check if node is unknown in the static map. this case should not happen too often as most of the occupied voxels are in the static map.
+                OcTreeNode* node = staticMap->search(it.getCoordinate());
+                if(!node) {
+                    it->setLogOdds(logodds(currentOctomap.getClampingThresMin()));
+                }
+            }
+
+
+        }
+    }
+    currentOctomap.updateInnerOccupancy();
+    return currentOctomap;
+}
+
+void OctomapLib::initStaticKeys(OcTree *staticMap) {
+
+    for (OcTree::leaf_iterator it = staticMap->begin_leafs(), end=staticMap->end_leafs(); it!=end; ++it) {
+        if(staticMap->isNodeOccupied(*it)) {
+            expandNodeRecurs(&(*it), it.getDepth(), tree_depth);
+        }
+    }
+
+    for (OcTree::leaf_iterator it = staticMap->begin_leafs(), end=staticMap->end_leafs(); it!=end; ++it) {
+        if(staticMap->isNodeOccupied(*it)) {
+            static_keys.insert(it.getKey());
+        }
+    }
+}
+
+void OctomapLib::expandOccupiedNodes(octomap::OcTree *octomap) {
+    for (OcTree::leaf_iterator it = octomap->begin_leafs(), end=octomap->end_leafs(); it!=end; ++it) {
+        if(octomap->isNodeOccupied(*it)) {
+            expandNodeRecurs(&(*it), it.getDepth(), tree_depth);
+        }
+    }
+    //writeOctomap(*octomap, "current.bt", true);
+}
+
+//Copied from Octomap Framework
+void OctomapLib::expandNodeRecurs(OcTreeNode* node, unsigned int depth, unsigned int max_depth) {
+  if (depth >= max_depth)
+    return;
+
+  assert(node);
+
+  // current node has no children => can be expanded
+  if (!node->hasChildren()) {
+    node->expandNode();
+  }
+
+  // recursively expand children
+  for (unsigned int i=0; i<8; i++) {
+    if (node->childExists(i)) {
+        expandNodeRecurs(node->getChild(i), depth+1, tree_depth);
+    }
+  }
+}
+
 
 void OctomapLib::octomapToPointcloud(OcTree *octomap, pcl::PointCloud<PointT>::Ptr &cloud) {
     //leaf_iterator skips inner nodes (takes the children)
@@ -271,14 +335,13 @@ void OctomapLib::printMapInfo(OcTree *ocTree) {
     }
 }
 
-void OctomapLib::writeOctomap(OcTree *ocTree, std::string path, bool binary) {
-    ocTree->expand();
+void OctomapLib::writeOctomap(OcTree ocTree, std::string path, bool binary) {
     if (binary) {
-        ocTree->writeBinary(path);
+        ocTree.writeBinary(path);
     } else {
-        ocTree->write(path);
+        ocTree.write(path);
     }
-    ocTree->expand();
+
 }
 
 OctomapLib::~OctomapLib() {

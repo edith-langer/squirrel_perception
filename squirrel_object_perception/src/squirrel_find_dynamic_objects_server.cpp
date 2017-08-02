@@ -46,7 +46,7 @@ bool RemoveBackground::removeBackground (squirrel_object_perception_msgs::FindDy
 
         octomap::OcTree* subtractedMap = &subtractedMapVar;
 
-        octomap_lib.writeOctomap(subtractedMap, "subtracted.bt", true);
+        octomap_lib.writeOctomap(*subtractedMap, "subtracted.bt", true);
 
         //remove voxels close to indicated obstacles in the map
         nav_msgs::OccupancyGridConstPtr grid_map = ros::topic::waitForMessage<nav_msgs::OccupancyGrid>("/map", *n_, ros::Duration(10));
@@ -258,6 +258,9 @@ void RemoveBackground::initialize(int argc, char **argv) {
     marker_pub = this->n_->advertise<visualization_msgs::Marker>("bb_triangle", 1);
 
     setStaticOctomap(staticOctomapPath_);
+    {pcl::ScopeTime time("Expand only nodes");
+        octomap_lib.initStaticKeys(staticMap);
+    }
 
     if (staticMap->getNumLeafNodes() == 0) {
         ROS_WARN("The static octomap is empty! You probably try to use the default octomap.");
@@ -321,7 +324,9 @@ int main (int argc, char ** argv)
 
 void RemoveBackground::setStaticOctomap(std::string staticPath) {
     octomap_lib.readOctoMapFromFile(staticPath, this->staticMap, ends_with(staticPath, "bt"));
-    staticMap->expand();
+//    {pcl::ScopeTime time("Expand all");
+//    staticMap->expand();
+//    }
     octomap_lib.leaf_size = staticMap->getNodeSize(octomap_lib.tree_depth);
 }
 
@@ -330,14 +335,16 @@ void RemoveBackground::setCurrentOctomap(octomap::OcTree *currentMap) {
     if (!currentMap) {
         ROS_INFO("TUW: no current octomap");
     }
-    currentMap->expand();
+    //currentMap->expand();
+    octomap_lib.expandOccupiedNodes(currentMap);
     this->currentMap = currentMap;
 }
 
 octomap::OcTree RemoveBackground::subtractOctomaps() {
     cout << "Start subtracting..." << endl;
     {pcl::ScopeTime time("Subtracting ");
-        octomap::OcTree result = octomap_lib.subtractOctomap(staticMap, *currentMap);
+        //octomap::OcTree result = octomap_lib.subtractOctomap(staticMap, *currentMap);
+        octomap::OcTree result = octomap_lib.compareOctomapToStatic(staticMap, *currentMap);
         t_differencing = time.getTime();
         cout << "Finished subtracting" << endl;
         return result;
@@ -601,7 +608,7 @@ bool RemoveBackground::checkWaypoint (squirrel_object_perception_msgs::CheckWayp
         int countMissingNodes = 0;
         int countTriangleNodes = 0;
         int countBB =0;
-        currentMap->expand();
+        //currentMap->expand();
         for (double ix =min.x(); ix < max.x(); ix += octomap_lib.leaf_size) {
             for (double iy =min.y(); iy < max.y(); iy += octomap_lib.leaf_size) {
                 countBB += 1;

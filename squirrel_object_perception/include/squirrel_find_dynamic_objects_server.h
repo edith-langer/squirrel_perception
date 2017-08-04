@@ -37,6 +37,8 @@
 #include "mongodb_store/message_store.h"
 #include <iostream>
 #include <fstream>
+#include <algorithm>
+#include <math.h>
 
 typedef pcl::PointXYZRGB PointT;
 const double POSE_THRESH = 0.10; //5 cm
@@ -59,7 +61,6 @@ private:
 
     bool removeBackground (squirrel_object_perception_msgs::FindDynamicObjects::Request &req, squirrel_object_perception_msgs::FindDynamicObjects::Response & response);
     bool checkWaypoint (squirrel_object_perception_msgs::CheckWaypoint::Request & request, squirrel_object_perception_msgs::CheckWaypoint::Response & response);
-
 
     mongodb_store::MessageStoreProxy message_store;
 
